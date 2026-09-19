@@ -1,0 +1,285 @@
+====================================================================================================
+INBESTIGA.TESIS — UNIVERSIDAD NACIONAL DE TRUJILLO
+CURSO: INTELIGENCIA DE NEGOCIOS (2026-II) | DOCENTE: DR. MENDOZA RIVERA RICARDO DARIO
+DOCUMENTO DE FUNDAMENTACIÓN: ANÁLISIS DIMENSIONAL, MODELADO DE HECHOS Y DESGLOSE POR FASES
+METODOLOGÍA: RALPH KIMBALL & EMBUDO COMERCIAL IMPULSE
+====================================================================================================
+
+CONTENIDO:
+1. INTRODUCCIÓN Y FUNDAMENTO CONCEPTUAL: HECHO VS. DIMENSIÓN
+2. ¿POR QUÉ CADA FASE DEFINE SUS PROPIAS DIMENSIONES Y HECHOS? (ENFOQUE KIMBALL)
+3. ANÁLISIS DIMENSIONAL DETALLADO FASE POR FASE
+   3.1. FASE 1 — BUYERS: CAPTACIÓN Y LEAD SCORING
+   3.2. FASE 2 — LEADS: CONVERSIÓN Y NEGOCIACIÓN IA
+   3.3. FASE 3 — PAYERS: COBRANZA Y PASARELA CULQI
+   3.4. FASE 4 — CUSTOMERS: ASESORÍA, BITÁCORA Y CUMPLIMIENTO
+4. MATRIZ DE BUS CORPORATIVO (ENTERPRISE BUS MATRIX) Y DIMENSIONES CONFORMADAS
+5. TRAZABILIDAD ANALÍTICA DE PUNTA A PUNTA DENTRO DEL NEGOCIO
+
+====================================================================================================
+1. INTRODUCCIÓN Y FUNDAMENTO CONCEPTUAL: HECHO VS. DIMENSIÓN
+====================================================================================================
+
+Para comprender el diseño del Data Warehouse (inbestiga_dw), es indispensable partir de la distinción
+ontológica y matemática establecida por Ralph Kimball en su obra de referencia "The Data Warehouse Toolkit":
+
+A. ¿QUÉ ES UN HECHO (FACT) DENTRO DEL NEGOCIO DE ASESORÍA DE TESIS?
+-------------------------------------------------------------------
+Un "Hecho" representa un EVENTO OPERATIVO o SUCESO TRANSACCIONAL que ocurre en un instante o proceso
+específico del negocio y que produce datos cuantitativos medibles. En términos sencillos:
+- Responde a la pregunta: ¿QUÉ PASÓ Y CUÁNTO SE PRODUJO?
+- Contiene métricas numéricas acumulables (aditivas, semiaditivas o de recuento).
+- Posee una granularidad atómica claramente definida (ejemplo: un clic/registro, una negociación terminada,
+  un pago cobrado por Culqi, una sesión de asesoría dictada).
+
+¿Por qué se definieron como Hechos en INBESTIGA.TESIS?
+Porque el negocio vive de cuatro momentos clave de intercambio:
+1. Cuando un estudiante interactúa o se registra: se produce un hecho de atracción.
+2. Cuando el Agente IA conversa y cierra la negociación: se produce un hecho de conversión.
+3. Cuando la pasarela Culqi acredita dinero en la cuenta bancaria: se produce un hecho financiero.
+4. Cuando el asesor revisa avances de tesis: se produce un hecho de servicio académico.
+Cualquier cálculo analítico (tasas de conversión, ingresos en soles, horas promedio, porcentajes de descuento)
+se deriva matemáticamente de agregar los números contenidos en estas tablas de hechos.
+
+B. ¿QUÉ ES UNA DIMENSIÓN (DIMENSION) DENTRO DEL NEGOCIO?
+--------------------------------------------------------
+Una "Dimensión" representa el CONTEXTO DESCRIPTIVO que rodea al hecho. Las dimensiones no guardan
+los valores numéricos a totalizar, sino los atributos categóricos y cualitativos que permiten
+filtrar, segmentar, agrupar y explorar los hechos.
+- Responde a las preguntas: ¿QUIÉN participó? ¿CUÁNDO ocurrió? ¿DÓNDE sucedió? ¿CÓMO se pagó?
+  ¿QUÉ carrera o universidad está involucrada? ¿POR QUÉ objeción se demoró la venta?
+- Son el vocabulario con el que el vicerrector, el decano o el gerente comercial interrogan al sistema
+  (ejemplo: "Ventas por Universidad", "Tasa de conversión por Tipo de Carrera", "Evolución de cobranzas por Mes").
+
+¿Por qué se definieron como Dimensiones en INBESTIGA.TESIS?
+Porque los hechos por sí solos (un número suelto como "1440.00 soles" o "45 minutos") no tienen valor sin
+contexto. Necesitamos saber que esos 1440.00 soles los pagó un tesista de 10mo ciclo de Ingeniería de Sistemas
+de la Universidad Nacional de Trujillo (UNT), mediante Yape Culqi en 1 cuota, gracias a una campaña de TikTok.
+La dimensión aporta el significado del negocio.
+
+
+====================================================================================================
+2. ¿POR QUÉ CADA FASE DEFINE SUS PROPIAS DIMENSIONES Y HECHOS?
+====================================================================================================
+
+LA RESPUESTA METODOLÓGICA: SÍ, CADA FASE DEFINE SUS DIMENSIONES Y HECHOS SEGÚN SU PROPIO CONTEXTO.
+
+Muchos cometen el error de diseñar una sola "supertabla" gigante para todo el negocio. La metodología
+Kimball prohíbe esto rotundamente a través del principio de "Modelado Dimensional Orientado a Procesos"
+(Business Process-Centric Dimensional Modeling).
+
+Razones por las cuales cada fase del embudo IMPULSE tiene su propio contexto dimensional:
+
+1. GRANULARIDAD DIFERENTE ENTRE FASES:
+   - En la Fase 1 (Buyers), el grano es una INTERACCIÓN o LEAD MAGNET (volumen alto, valor bajo).
+   - En la Fase 2 (Leads), el grano es un CICLO DE NEGOCIACIÓN DE UN PROYECTO (tiempo, objeciones).
+   - En la Fase 3 (Payers), el grano es una TRANSACCIÓN MONETARIA (cada cuota pagada en Culqi).
+   - En la Fase 4 (Customers), el grano es el EXPEDIENTE DE SESIONES Y AVANCE DE CAPÍTULOS.
+   Si intentáramos juntar el pago de Culqi con el clic en TikTok en una sola tabla, la diferencia
+   de granularidad destruiría la integridad de los datos y provocaría duplicaciones masivas de dinero.
+
+2. CONTEXTO OPERATIVO Y AGENTES IA ESPECIALIZADOS:
+   Cada fase está gobernada por un proceso y un agente de IA distinto:
+   - Fase 1: Agente de Marketing (evalúa canales, campañas y contenidos).
+   - Fase 2: Agente Negociador (evalúa descuentos, objeciones y urgencia académica).
+   - Fase 3: Módulo Pasarela Culqi (evalúa pasarelas, tokens, CIPs PagoEfectivo y estados de cobro).
+   - Fase 4: Agente Postventa y Asesor Humano (evalúa similitud Turnitin, normas APA y sesiones).
+   Por lo tanto, los hechos y dimensiones deben responder al vocabulario y objetivos de cada etapa.
+
+3. EL PUENTE: DIMENSIONES CONFORMADAS (CONFORMED DIMENSIONS):
+   Aunque cada fase tiene su propia tabla de hechos, NO son islas aisladas. Comparten "Dimensiones Conformadas"
+   (como DIM_TIEMPO, DIM_BUYER, DIM_UNIVERSIDAD y DIM_SERVICIO). Esto permite el análisis "Drill-Across",
+   es decir, cruzar información entre fases para responder preguntas como:
+   "¿Los estudiantes que descargaron el Lead Magnet de la Campaña X en Fase 1, terminaron pagando en Fase 3
+   y qué nivel de satisfacción tuvieron en Fase 4?"
+
+
+====================================================================================================
+3. ANÁLISIS DIMENSIONAL DETALLADO FASE POR FASE (EMBUDO IMPULSE)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+3.1. FASE 1 — BUYERS: EL CLIENTE Y LA CAPTACIÓN
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO DE NEGOCIO:
+   El objetivo es captar al estudiante de últimos ciclos (9no o 10mo) o egresado que enfrenta
+   dificultades para iniciar su tesis. El Agente de Marketing distribuye contenidos educativos
+   (lead magnets, guías de normas APA, checklists de titulación) y califica el interés inicial
+   mediante un puntaje automatizado (Lead Score).
+
+B. TABLA DE HECHOS: FACT_CAPTACION_BUYER
+   - Grano del Hecho: Un registro por cada evento de interacción o registro de buyer en un día determinado.
+   - Métricas (Medidas Numéricas Cuantitativas):
+     * lead_score (INT): Puntaje acumulado de 0 a 100 según el comportamiento y perfil.
+     * es_lead (BIT: 0 o 1): Indicador de superación del umbral de calificación (score >= 70).
+     * presupuesto_estimado (DECIMAL): Rango económico declarado por el estudiante.
+     * interacciones_conteo (COUNT): Frecuencia de interacción del usuario.
+
+C. DIMENSIONES DEL CONTEXTO DE FASE 1:
+   - DIM_TIEMPO: Fecha exacta en que interactuó o se registró (año, mes, día, hora).
+   - DIM_BUYER: Identidad del contacto (nombre, ciclo académico, situación laboral).
+   - DIM_UNIVERSIDAD: Universidad del tesista (UNT, UPAO, UCV, etc.) para medir penetración.
+   - DIM_CARRERA: Especialidad (Ingeniería, Derecho, etc.) para adaptar el vocabulario metodológico.
+   - DIM_UBICACION: Departamento, provincia y distrito (georreferenciación de demanda).
+   - DIM_CANAL: Canal digital o físico de origen (TikTok, Instagram, WhatsApp, Convenio Universitario).
+   - DIM_CAMPAÑA: Campaña publicitaria específica a la que respondió el anuncio.
+   - DIM_CONTENIDO: Pieza específica de contenido o lead magnet descargado (ej. "Esquema Capítulo I").
+
+D. KPIS DEL NEGOCIO QUE SUSTENTA:
+   - Tasa de Conversión Buyer -> Lead (Meta: >= 15%).
+   - Costo por Lead / CPL (Meta: <= S/ 8.00).
+   - Tiempo promedio de primera respuesta del Agente IA (Meta: <= 2 minutos).
+   - Tasa de activación de Lead Magnets (Meta: >= 35%).
+
+----------------------------------------------------------------------------------------------------
+3.2. FASE 2 — LEADS: CONVERSIÓN Y PERFIL DE NEGOCIACIÓN
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO DE NEGOCIO:
+   El buyer ya superó los 70 puntos y se convirtió en Lead Calificado. Entra en acción el Agente
+   Negociador. Se elabora un diagnóstico preliminar del estado de su investigación, se emite una
+   cotización formal estructurada y se atienden objeciones típicas (falta de dinero, poco tiempo,
+   desconfianza en asesorías externas).
+
+B. TABLA DE HECHOS: FACT_NEGOCIACION_LEAD
+   - Grano del Hecho: Un registro por cada proceso de negociación completado con un lead calificado
+     (culmine en propuesta aceptada o en abandono).
+   - Métricas (Medidas Numéricas Cuantitativas):
+     * tiempo_negociacion_min (INT): Duración en minutos desde la apertura del chat hasta el cierre.
+     * mensajes_totales (INT): Cantidad de intercambios requeridos para llegar a un acuerdo.
+     * descuento_negociado_pct (DECIMAL): Porcentaje de rebaja otorgado según reglas comerciales (0 a 15%).
+     * convertido_a_pago (BIT: 1 o 0): Bandera que indica si el lead aceptó y pasó a pagar.
+     * escalado_humano (BIT: 1 o 0): Bandera que indica si el caso requirió intervención de un supervisor.
+
+C. DIMENSIONES DEL CONTEXTO DE FASE 2:
+   - DIM_TIEMPO: Momento en que se desarrolló y concluyó la negociación.
+   - DIM_BUYER: El estudiante involucrado y sus restricciones de tiempo/trabajo.
+   - DIM_LEAD: Nivel de prioridad asignado (ALTA, MEDIA, BAJA) según urgencia y puntaje.
+   - DIM_SERVICIO: Tipo de asesoría requerida (Plan de Tesis, Tesis Integral, Artículo Scopus).
+   - DIM_OBJECION: Motivo principal de freno manifestado por el tesista (PRECIO, PLAZO, DESCONFIANZA).
+   - DIM_UNIVERSIDAD y DIM_CARRERA: Para medir qué facultades negocian más o piden más facilidades.
+   - DIM_ASESOR: Asesor o perfil asignado tentativo para el presupuesto.
+
+D. KPIS DEL NEGOCIO QUE SUSTENTA:
+   - Tasa de Conversión Lead -> Payer (Meta: >= 18%).
+   - Tasa de Recuperación de Objeciones (Meta: >= 25%).
+   - Tiempo promedio de Cierre de Venta (Meta: <= 72 horas).
+   - Tasa de Escalamiento a Asesor Humano (Meta: 15% a 20%).
+   - Descuento promedio negociado (Meta: <= 10%).
+
+----------------------------------------------------------------------------------------------------
+3.3. FASE 3 — PAYERS: COBRANZA Y ACTIVACIÓN DEL SERVICIO
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO DE NEGOCIO:
+   El tesista aceptó la propuesta. Ahora debe realizar el desembolso económico. La plataforma
+   ofrece cobro automatizado mediante pasarela CULQI EXPRESS (Yape nativo con código de aprobación OTP,
+   tarjetas de crédito/débito y PagoEfectivo con código CIP). Se admiten pagos al contado o en cuotas.
+   Si el cliente demora en pagar, se disparan alertas automáticas de cobranza.
+
+B. TABLA DE HECHOS: FACT_PAGO
+   - Grano del Hecho: Una transacción individual de pago confirmada, rechazada o expirada en la pasarela.
+   - Métricas (Medidas Numéricas Cuantitativas):
+     * monto_pagado (DECIMAL): Monto efectivamente ingresado en soles (PEN).
+     * cuota_numero (INT): Número correlativo de la cuota pagada (ej. Cuota 1 de 2, o Cuota 1 de 1).
+     * descuento_aplicado (DECIMAL): Monto en soles deducido del precio de lista.
+     * tiempo_confirmacion_min (INT): Minutos transcurridos desde que se generó la orden hasta la acreditación.
+
+C. DIMENSIONES DEL CONTEXTO DE FASE 3:
+   - DIM_TIEMPO: Fecha y hora exacta de la transacción bancaria.
+   - DIM_BUYER: Identificación del pagador (estudiante o familiar que cofinancia).
+   - DIM_LEAD: Vínculo con la cotización aprobada previamente.
+   - DIM_SERVICIO: Producto académico que está siendo financiado.
+   - DIM_MODALIDAD_PAGO: Características del pago:
+     * Método: YAPE, TARJETA, PAGOEFECTIVO, TRANSFERENCIA.
+     * Pasarela: CULQI EXPRESS, STRIPE.
+     * Esquema: Contado (1 cuota), Financiado (2 o 3 cuotas).
+
+D. KPIS DEL NEGOCIO QUE SUSTENTA:
+   - Tasa de Conversión Propuesta -> Pago (Meta: >= 60%).
+   - Tiempo Promedio de Confirmación de Pago Culqi (Meta: <= 10 minutos).
+   - Tasa de Recuperación por Alertas de Cobranza (Meta: >= 30%).
+   - Ingreso Total Recaudado (MRR / Facturación bruta en PEN).
+
+----------------------------------------------------------------------------------------------------
+3.4. FASE 4 — CUSTOMERS: ATENCIÓN, BITÁCORA Y CUMPLIMIENTO
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO DE NEGOCIO:
+   El pago fue verificado por el Webhook de Culqi. Inmediatamente el tesista se convierte en CUSTOMER.
+   El sistema le asigna un Asesor Especialista (Doctor o Magíster afín a su línea de investigación)
+   y habilita la Bitácora de Acompañamiento donde se registran las actas de sesión, los entregables
+   revisados (Capítulo I, II, III, análisis de datos en SPSS/Python/Stata) y la alerta de riesgo de abandono.
+
+B. TABLA DE HECHOS: FACT_SERVICIO
+   - Grano del Hecho: Un registro mensual o acumulado del estado de avance y sesiones por cliente asesorado.
+   - Métricas (Medidas Numéricas Cuantitativas):
+     * sesiones_realizadas (INT): Cantidad de asesorías por videollamada efectivamente ejecutadas.
+     * sesiones_programadas (INT): Total de sesiones pactadas según contrato.
+     * dias_servicio_activo (INT): Días transcurridos desde la activación de la cuenta.
+     * porcentaje_avance_tesis (DECIMAL): Nivel de completitud del documento (0 a 100%).
+     * puntaje_satisfaccion_encuesta (DECIMAL): Calificación otorgada por el alumno (1 a 5 estrellas).
+
+C. DIMENSIONES DEL CONTEXTO DE FASE 4:
+   - DIM_TIEMPO: Calendario de atención y fechas de entrega de capítulos.
+   - DIM_BUYER: Tesista que recibe el servicio y sus condiciones de trabajo.
+   - DIM_ASESOR: Académico responsable de la asesoría (grado: Doctor/Magíster, especialidad).
+   - DIM_SERVICIO: Servicio contratado con sus plazos límite estipulados.
+
+D. KPIS DEL NEGOCIO QUE SUSTENTA:
+   - Tiempo de asignación de asesor tras el pago (Meta: <= 24 horas).
+   - Tasa de primera sesión agendada dentro de 48h (Meta: >= 85%).
+   - Tasa de cumplimiento del cronograma pactado (Meta: >= 75%).
+   - Tasa de detección temprana de riesgo de abandono (Meta: >= 80%).
+
+
+====================================================================================================
+4. MATRIZ DE BUS CORPORATIVO (ENTERPRISE BUS MATRIX)
+====================================================================================================
+
+La siguiente matriz muestra cómo las dimensiones conformadas atraviesan horizontalmente los procesos
+del embudo comercial IMPULSE, garantizando consistencia semántica en todo el Data Warehouse:
+
+----------------------------------------------------------------------------------------------------
+PROCESO / TABLA DE HECHOS    | TIE | BUY | UNI | CAR | UBI | CAN | CAM | CON | LEA | SER | OBJ | MOD | ASE
+----------------------------------------------------------------------------------------------------
+1. Captación (FACT_CAPTACION) |  X  |  X  |  X  |  X  |  X  |  X  |  X  |  X  |     |     |     |     |    
+2. Negociación (FACT_NEGOC)  |  X  |  X  |  X  |  X  |     |     |     |     |  X  |  X  |  X  |     |  X 
+3. Cobranza (FACT_PAGO)      |  X  |  X  |     |     |     |     |     |     |  X  |  X  |     |  X  |    
+4. Asesoría (FACT_SERVICIO)  |  X  |  X  |     |     |     |     |     |     |     |  X  |     |     |  X 
+----------------------------------------------------------------------------------------------------
+LEYENDA DE DIMENSIONES:
+TIE: DIM_TIEMPO        BUY: DIM_BUYER          UNI: DIM_UNIVERSIDAD   CAR: DIM_CARRERA
+UBI: DIM_UBICACION     CAN: DIM_CANAL          CAM: DIM_CAMPAÑA       CON: DIM_CONTENIDO
+LEA: DIM_LEAD          SER: DIM_SERVICIO       OBJ: DIM_OBJECION      MOD: DIM_MODALIDAD_PAGO
+ASE: DIM_ASESOR
+
+PROPIEDADES METODOLÓGICAS DE LA MATRIZ:
+- DIM_TIEMPO y DIM_BUYER están presentes en el 100% de las fases: permiten calcular el ciclo de vida
+  completo de un cliente (Customer Lifetime Value - LTV) y el tiempo total de conversión de punta a punta.
+- DIM_SERVICIO vincula la negociación (Fase 2), el pago recibido (Fase 3) y la entrega académica (Fase 4),
+  garantizando que la promesa comercial coincida con la ejecución pedagógica.
+
+
+====================================================================================================
+5. TRAZABILIDAD ANALÍTICA DE PUNTA A PUNTA DENTRO DEL NEGOCIO
+====================================================================================================
+
+Gracias a esta arquitectura dimensional, una consulta OLAP o dashboard gerencial puede responder
+preguntas complejas de negocio en una sola sentencia SQL:
+
+Ejemplo 1: Retorno de Inversión (ROI) por Canal Digital:
+"¿Cuánto dinero real en pagos confirmados de Culqi generó el canal 'TikTok' frente a 'Convenios Universitarios'?"
+-> Cruza FACT_CAPTACION_BUYER (Canal) con FACT_PAGO (Monto en soles) mediante la clave compartida buyer_key.
+
+Ejemplo 2: Efectividad de la Negociación por Universidad:
+"¿En qué universidades se otorgan los mayores descuentos comerciales y cuál es su tasa de cierre?"
+-> Utiliza FACT_NEGOCIACION_LEAD agrupado por DIM_UNIVERSIDAD (siglas y nombre).
+
+Ejemplo 3: Impacto de la Cobranza en Cuotas sobre el Abandono:
+"¿Los tesistas que pagaron en 2 cuotas tienen mayor tasa de atraso en el Capítulo III que los que pagaron al contado?"
+-> Cruza FACT_PAGO (DIM_MODALIDAD_PAGO) con FACT_SERVICIO (dias_servicio_activo y cumplimiento) mediante buyer_key.
+
+CONCLUSIÓN FINAL:
+La definición de hechos y dimensiones en INBESTIGA.TESIS no es arbitraria ni estática; es el reflejo
+fiel de la cadena de valor universitaria. Cada fase posee sus propios hechos porque captura hitos
+operativos distintos, y comparte dimensiones para asegurar que los directivos de la empresa y los
+docentes asesores tomen decisiones fundamentadas en datos verificables.
+====================================================================================================

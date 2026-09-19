@@ -1,0 +1,316 @@
+====================================================================================================
+INBESTIGA.TESIS — UNIVERSIDAD NACIONAL DE TRUJILLO
+CURSO: INTELIGENCIA DE NEGOCIOS (2026-II) | DOCENTE: DR. MENDOZA RIVERA RICARDO DARIO
+DOCUMENTO DE FUNDAMENTACIÓN: ARQUITECTURA DE DATA MARTS POR PROCESO DE NEGOCIO
+METODOLOGÍA: RALPH KIMBALL & EMBUDO COMERCIAL IMPULSE
+====================================================================================================
+
+CONTENIDO:
+1. INTRODUCCIÓN Y FUNDAMENTO METODOLÓGICO: DATA MARTS VS. DATA WAREHOUSE MONOLÍTICO
+2. ARQUITECTURA GENERAL: 4 DATA MARTS DEPARTAMENTALES DESACOPLADOS
+3. DESGLOSE FASE POR FASE: ACTIVIDADES, DIMENSIONES, HECHOS Y KPIS
+   3.1. FASE 1 — DATA MART DM_BUYERS (Captación y Lead Scoring)
+   3.2. FASE 2 — DATA MART DM_LEADS (Conversión y Negociación con IA)
+   3.3. FASE 3 — DATA MART DM_PAYERS (Cobranza y Pasarela Culqi)
+   3.4. FASE 4 — DATA MART DM_CUSTOMERS (Atención, Bitácora y Cumplimiento)
+4. MATRIZ DE BUS CORPORATIVO (ENTERPRISE BUS MATRIX) Y DIMENSIONES CONFORMADAS (dm_shared)
+5. ESTRUCTURA MODULAR DE ARCHIVOS SQL IMPLEMENTADOS
+6. LINAJE DE DATOS Y TRAZABILIDAD ANALÍTICA DE PUNTA A PUNTA (DRILL-ACROSS)
+
+====================================================================================================
+1. INTRODUCCIÓN Y FUNDAMENTO METODOLÓGICO: DATA MARTS VS. DATA WAREHOUSE MONOLÍTICO
+====================================================================================================
+
+En la cátedra de Inteligencia de Negocios dictada por el Dr. Mendoza Rivera, se enfatiza que las
+organizaciones modernas NO deben diseñar un Data Warehouse monolítico centralizado que pretenda 
+contener todo en una sola bolsa de tablas sin separación de responsabilidades, ni mucho menos 
+realizar consultas analíticas directamente sobre la base transaccional (OLTP).
+
+Siguiendo a Ralph Kimball ("The Data Warehouse Toolkit"), la solución correcta está gobernada por:
+"Arquitectura de Data Marts Orientados a Procesos de Negocio" (Business Process-Centric Data Marts).
+
+PRINCIPIOS CLAVE ADOPTADOS EN INBESTIGA.TESIS:
+1. DESACOPLAMIENTO POR PROCESO:
+   Cada fase del embudo IMPULSE representa un proceso de negocio distinto, administrado por un agente 
+   o área operativa diferente:
+   - Fase 1: Proceso de Captación (Agente de Marketing).
+   - Fase 2: Proceso de Negociación (Agente Negociador de IA).
+   - Fase 3: Proceso de Cobranza (Pasarela Culqi y Alertas de Pago).
+   - Fase 4: Proceso de Atención y Acompañamiento (Agente Postventa y Asesores Doctores/Magísteres).
+   Por lo tanto, cada proceso se modela en su propio Data Mart departamental con su propio esquema estrella.
+
+2. PROHIBICIÓN DE CONSULTAS TRANSACCIONALES DIRECTAS EN EL DASHBOARD:
+   La base operativa (inbestiga_db) solo atiende transacciones de alta concurrencia (OLTP). Los dashboards
+   y consultas analíticas se conectan EXCLUSIVAMENTE a las vistas y tablas de los Data Marts en inbestiga_dw.
+
+3. INTEGRACIÓN MEDIANTE EL BUS MATRIX:
+   Aunque cada fase posee su propio Data Mart, están unidos horizontalmente por "Dimensiones Conformadas"
+   alojadas en el esquema 'dm_shared', lo que hace posible el análisis cruzado (Drill-Across).
+
+====================================================================================================
+2. ARQUITECTURA GENERAL: 4 DATA MARTS DEPARTAMENTALES DESACOPLADOS
+====================================================================================================
+
+La base de datos analítica 'inbestiga_dw' en Microsoft SQL Server está estructurada mediante 5 esquemas
+lógicos independientes:
+
+- dm_shared:   Dimensiones Conformadas compartidas por todos los procesos (Bus Matrix).
+- dm_buyers:   Data Mart 1 — Proceso de Captación y Marketing (Fase BUYERS).
+- dm_leads:    Data Mart 2 — Proceso de Negociación y Cierre con IA (Fase LEADS).
+- dm_payers:   Data Mart 3 — Proceso de Cobranza y Pasarela Culqi (Fase PAYERS).
+- dm_customers: Data Mart 4 — Proceso de Asesoría, Bitácora y Avance (Fase CUSTOMERS).
+
+====================================================================================================
+3. DESGLOSE FASE POR FASE: ACTIVIDADES, DIMENSIONES, HECHOS Y KPIS
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+3.1. FASE 1 — DATA MART DM_BUYERS: CAPTACIÓN Y LEAD SCORING
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO Y ACTIVIDADES CLAVE (Sección 3.4 del Informe):
+   1. Segmentación de audiencia según universidad, carrera y ciclo académico.
+   2. Producción y calendarización de contenido de valor (Reels nocturnos en TikTok e Instagram).
+   3. Distribución automatizada de Lead Magnets ("Esquema del Capítulo I", "Checklist de Titulación").
+   4. Gestión de campañas de anuncios pagados y convenios institucionales.
+   5. Registro mediante formulario inteligente con cálculo de Lead Score en tiempo real (0 a 100).
+   6. Detección y prevención de registros duplicados por número de WhatsApp.
+
+B. TABLA DE HECHOS: dm_buyers.FACT_CAPTACION
+   - Grano: Un registro por evento de registro o interacción acumulada por buyer y fecha.
+   - Medidas Cuantitativas:
+     * lead_score (INT): Ponderación calculada del perfil (0 a 100).
+     * es_lead (BIT): Bandera que indica superación del umbral (score >= 70).
+     * presupuesto_estimado (DECIMAL): Capacidad de pago declarada por el tesista.
+     * total_interacciones (INT): Frecuencia de contacto en el embudo.
+     * descargo_lead_magnet (BIT): Indicador de consumo de material educativo.
+     * tiempo_primera_respuesta_seg (INT): Latencia de atención del bot en segundos.
+
+C. DIMENSIONES ESPECÍFICAS Y CONFORMADAS:
+   - Específicas: dm_buyers.DIM_CANAL, dm_buyers.DIM_CAMPAÑA, dm_buyers.DIM_CONTENIDO, dm_buyers.DIM_UBICACION.
+   - Conformadas: dm_shared.DIM_TIEMPO, dm_shared.DIM_ESTUDIANTE, dm_shared.DIM_UNIVERSIDAD, dm_shared.DIM_CARRERA.
+
+D. VISTAS Y KPIS CALCULADOS EN EL DATA MART:
+   1. dm_buyers.vw_kpi_buyers_conversion:
+      Tasa de Conversión Buyer -> Lead = (Leads generados / Total buyers) * 100.
+      Meta: >= 15% (Verde), 8-14.9% (Amarillo), < 8% (Rojo).
+   2. dm_buyers.vw_kpi_buyers_cpl:
+      Costo por Lead (CPL) = Inversión total campaña / Leads generados.
+      Meta: <= S/ 8.00 (Verde), S/ 8.01 - 12.00 (Amarillo), > S/ 12.00 (Rojo).
+   3. dm_buyers.vw_kpi_buyers_interacciones:
+      Promedio de interacciones por buyer = Total interacciones / Total buyers.
+      Meta: >= 4 (Verde), 2-3.9 (Amarillo), < 2 (Rojo).
+   4. dm_buyers.vw_kpi_buyers_tiempo_primera_respuesta:
+      Tiempo promedio de primera respuesta de la IA.
+      Meta: <= 2 min / 120 seg (Verde), 2-5 min (Amarillo), > 5 min (Rojo).
+   5. dm_buyers.vw_kpi_buyers_por_canal:
+      Tasa de conversión y score promedio desagregado por canal (TikTok vs Ads vs Convenio).
+
+----------------------------------------------------------------------------------------------------
+3.2. FASE 2 — DATA MART DM_LEADS: CONVERSIÓN Y NEGOCIACIÓN CON IA
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO Y ACTIVIDADES CLAVE (Sección 4.4 del Informe):
+   1. Completar progresivamente la Pantalla de Perfil de Negociación del lead.
+   2. Diagnóstico gratuito del estado actual de la tesis (revisión de avances y observaciones previas).
+   3. Emisión de cotizaciones dinámicas y propuestas estructuradas según el tipo de investigación.
+   4. Manejo automatizado de objeciones comerciales (precio, plazo, desconfianza) vía WhatsApp.
+   5. Aplicación estricta del Motor de Reglas Comerciales: descuento máximo 15% y facilidades en cuotas.
+   6. Derivación y escalamiento a supervisor humano cuando el caso excede los umbrales de la IA.
+
+B. TABLA DE HECHOS: dm_leads.FACT_NEGOCIACION
+   - Grano: Un registro por negociación terminada con un lead calificado (culmine en venta o abandono).
+   - Medidas Cuantitativas:
+     * mensajes_totales (INT): Volumen de intercambios requeridos para el acuerdo.
+     * tiempo_negociacion_min (INT): Duración en minutos desde el inicio hasta el cierre.
+     * precio_original (DECIMAL): Precio de lista según catálogo.
+     * precio_propuesto (DECIMAL): Precio acordado tras aplicar descuentos.
+     * descuento_negociado_pct (DECIMAL): Porcentaje de rebaja otorgado (0.00% a 15.00%).
+     * recargo_urgencia_aplicado (BIT): Bandera de recargo cuando el plazo es < 30 días.
+     * convertido_a_pago (BIT): Bandera de éxito (transiciona a PAYER).
+     * escalado_humano (BIT): Bandera de intervención de un asesor humano.
+
+C. DIMENSIONES ESPECÍFICAS Y CONFORMADAS:
+   - Específicas: dm_leads.DIM_LEAD, dm_leads.DIM_OBJECION, dm_leads.DIM_MODALIDAD_NEGOCIADA.
+   - Conformadas: dm_shared.DIM_TIEMPO, dm_shared.DIM_ESTUDIANTE, dm_shared.DIM_SERVICIO,
+     dm_shared.DIM_UNIVERSIDAD, dm_shared.DIM_CARRERA.
+
+D. VISTAS Y KPIS CALCULADOS EN EL DATA MART:
+   1. dm_leads.vw_kpi_leads_conversion:
+      Tasa de Conversión Lead -> Payer = (Convertidos a pago / Total leads) * 100.
+      Meta: >= 18% (Verde), 10-17.9% (Amarillo), < 10% (Rojo).
+   2. dm_leads.vw_kpi_leads_recuperacion_objeciones:
+      Tasa de Recuperación de Objeciones = (Ventas cerradas con objeción / Total objeciones) * 100.
+      Meta: >= 25% (Verde), 15-24.9% (Amarillo), < 15% (Rojo).
+   3. dm_leads.vw_kpi_leads_tiempo_negociacion:
+      Tiempo Promedio de Cierre de Negociación en horas.
+      Meta: <= 72 h (Verde), 72-120 h (Amarillo), > 120 h (Rojo).
+   4. dm_leads.vw_kpi_leads_escalamiento:
+      Tasa de Escalamiento a Asesor Humano.
+      Meta: 15% - 20% (Verde), 10-14.9% o 21-30% (Amarillo), < 10% o > 30% (Rojo).
+   5. dm_leads.vw_kpi_leads_descuento_promedio:
+      Descuento Promedio Negociado (Control de margen comercial).
+      Meta: <= 10.0% (Verde), 10.1-15.0% (Amarillo), > 15.0% (Rojo).
+   6. dm_leads.vw_kpi_leads_por_universidad:
+      Análisis cruzado de conversión y descuento según universidad de procedencia (UNT vs UPAO).
+
+----------------------------------------------------------------------------------------------------
+3.3. FASE 3 — DATA MART DM_PAYERS: COBRANZA Y PASARELA CULQI
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO Y ACTIVIDADES CLAVE (Sección 5.5 del Informe):
+   1. Presentación inmediata de canales de pago digitales tras la aceptación de la propuesta.
+   2. Cobro automatizado con pasarela CULQI EXPRESS (Yape nativo con código OTP, Tarjetas y PagoEfectivo).
+   3. Validación instantánea del pago mediante Webhook asíncrono sin intervención manual.
+   4. Disparo de alertas automáticas de emplazamiento de cobranza (4 h, 12 h y 24 h sin pago).
+   5. Registro de la orden y transición automática del estado de LEAD a PAYER.
+
+B. TABLA DE HECHOS: dm_payers.FACT_COBRANZA
+   - Grano: Una fila por cada transacción de pago intentada o confirmada en la pasarela.
+   - Medidas Cuantitativas y Monetarias:
+     * monto_pagado (DECIMAL): Ingreso neto acreditado en soles (PEN).
+     * monto_descuento (DECIMAL): Rebaja aplicada sobre el precio de lista.
+     * cuota_numero (INT): Número correlativo de la cuota pagada (ej. Cuota 1).
+     * total_cuotas (INT): Esquema contratado (1 al contado, o 2/3 cuotas).
+     * tiempo_confirmacion_seg (INT): Latencia de confirmación del Webhook en segundos.
+     * pago_confirmado (BIT): Bandera de acreditación bancaria exitosa.
+     * pago_tras_alerta_cobranza (BIT): Bandera de recuperación tras recordatorio.
+
+C. DIMENSIONES ESPECÍFICAS Y CONFORMADAS:
+   - Específicas: dm_payers.DIM_METODO_PAGO, dm_payers.DIM_CANAL_PAGO.
+   - Conformadas: dm_shared.DIM_TIEMPO, dm_shared.DIM_ESTUDIANTE, dm_shared.DIM_SERVICIO, dm_shared.DIM_UNIVERSIDAD.
+
+D. VISTAS Y KPIS CALCULADOS EN EL DATA MART:
+   1. dm_payers.vw_kpi_payers_conversion:
+      Tasa de Conversión Propuesta -> Pago = (Pagos confirmados / Propuestas negociadas) * 100.
+      Meta: >= 60% (Verde), 40-59.9% (Amarillo), < 40% (Rojo).
+   2. dm_payers.vw_kpi_payers_tiempo_confirmacion:
+      Tiempo Promedio de Confirmación Culqi (Yape y Tarjeta) en minutos.
+      Meta: <= 10 min (Verde), 10-30 min (Amarillo), > 30 min (Rojo).
+   3. dm_payers.vw_kpi_payers_recuperacion_alertas:
+      Tasa de Recuperación por Alerta de Cobranza = (Pagos tras alerta / Total pagos) * 100.
+      Meta: >= 30% (Verde), 15-29.9% (Amarillo), < 15% (Rojo).
+   4. dm_payers.vw_kpi_payers_recaudacion_total:
+      Ingreso Total Recaudado (MRR/Facturación) agrupado por método (Yape vs Tarjeta) y modalidad.
+
+----------------------------------------------------------------------------------------------------
+3.4. FASE 4 — DATA MART DM_CUSTOMERS: ATENCIÓN, BITÁCORA Y CUMPLIMIENTO
+----------------------------------------------------------------------------------------------------
+A. CONTEXTO Y ACTIVIDADES CLAVE (Sección 6.6 del Informe):
+   1. Bienvenida y asignación automática de Asesor Académico especialista (Doctor o Magíster).
+   2. Agendamiento y realización de la primera sesión de diagnóstico ampliado dentro de las 48 horas.
+   3. Registro sistemático de cada sesión en la Bitácora de Acompañamiento (Capítulos I, II, III).
+   4. Checkpoint de cumplimiento de cronograma con alertas tempranas 48h antes de cada entrega.
+   5. Detección y contención de riesgo de deserción o abandono ante reprogramaciones consecutivas.
+   6. Cierre del servicio con aplicación de encuesta de satisfacción estudiantil.
+
+B. TABLA DE HECHOS: dm_customers.FACT_ATENCION
+   - Grano: Un registro por tesista activo y sesión/hito pactado en el cronograma.
+   - Medidas Cuantitativas y Académicas:
+     * horas_asignacion_asesor (INT): Tiempo transcurrido entre el pago y la asignación del asesor.
+     * horas_primera_sesion (INT): Tiempo transcurrido hasta agendar la primera sesión.
+     * primera_sesion_48h (BIT): Cumplimiento de la meta de primera sesión en <= 48 horas.
+     * sesiones_programadas (INT): Total de asesorías pactadas por contrato.
+     * sesiones_realizadas (INT): Asesorías dictadas con acta firmada en bitácora.
+     * entregas_a_tiempo (INT): Capítulos de tesis aprobados dentro del plazo.
+     * dias_servicio_activo (INT): Antigüedad del acompañamiento pedagógico.
+     * porcentaje_avance_tesis (DECIMAL): Grado de completitud de la investigación (0 a 100%).
+     * puntaje_satisfaccion_encuesta (DECIMAL): Calificación otorgada por el tesista (1.00 a 5.00).
+     * alerta_riesgo_abandono (BIT): Bandera de riesgo de deserción por inactividad.
+
+C. DIMENSIONES ESPECÍFICAS Y CONFORMADAS:
+   - Específicas: dm_customers.DIM_ASESOR, dm_customers.DIM_ESTADO_SERVICIO.
+   - Conformadas: dm_shared.DIM_TIEMPO, dm_shared.DIM_ESTUDIANTE, dm_shared.DIM_SERVICIO,
+     dm_shared.DIM_UNIVERSIDAD, dm_shared.DIM_CARRERA.
+
+D. VISTAS Y KPIS CALCULADOS EN EL DATA MART:
+   1. dm_customers.vw_kpi_customers_tiempo_asignacion:
+      Tiempo de Asignación de Asesor tras Pago Confirmado.
+      Meta: <= 24 h (Verde), 24-48 h (Amarillo), > 48 h (Rojo).
+   2. dm_customers.vw_kpi_customers_primera_sesion_48h:
+      Tasa de Primera Sesión Agendada dentro de 48h = (Sesiones en <= 48h / Total customers) * 100.
+      Meta: >= 85% (Verde), 65-84.9% (Amarillo), < 65% (Rojo).
+   3. dm_customers.vw_kpi_customers_cumplimiento_cronograma:
+      Tasa de Cumplimiento del Cronograma = (Sesiones/Entregas a tiempo / Sesiones programadas) * 100.
+      Meta: >= 75% (Verde), 55-74.9% (Amarillo), < 55% (Rojo).
+   4. dm_customers.vw_kpi_customers_deteccion_riesgo:
+      Tasa de Detección Temprana de Casos de Riesgo.
+      Meta: <= 20% en riesgo (Verde), 20.1-35% (Amarillo), > 35% (Rojo).
+   5. dm_customers.vw_kpi_customers_satisfaccion:
+      Satisfacción Promedio del Tesista (Encuesta de Cierre).
+      Meta: >= 4.2 / 5.0 (Verde), 3.5-4.1 (Amarillo), < 3.5 (Rojo).
+
+====================================================================================================
+4. MATRIZ DE BUS CORPORATIVO (ENTERPRISE BUS MATRIX) Y DIMENSIONES CONFORMADAS
+====================================================================================================
+
+La Enterprise Bus Matrix garantiza la consistencia semántica y el análisis multidimensional cruzado
+(Drill-Across) entre los 4 Data Marts:
+
+----------------------------------------------------------------------------------------------------
+PROCESO / DATA MART        | TIEMPO | ESTUDIANTE | UNIVERSIDAD | CARRERA | SERVICIO | ASESOR
+----------------------------------------------------------------------------------------------------
+1. Captación (dm_buyers)   |   X    |     X      |      X      |    X    |          |       
+2. Negociación (dm_leads)  |   X    |     X      |      X      |    X    |    X     |       
+3. Cobranza (dm_payers)    |   X    |     X      |      X      |         |    X     |       
+4. Atención (dm_customers) |   X    |     X      |      X      |    X    |    X     |   X   
+----------------------------------------------------------------------------------------------------
+
+UTILIDAD DE LAS DIMENSIONES CONFORMADAS:
+- DIM_TIEMPO y DIM_ESTUDIANTE abarcan el 100% de los Data Marts, lo que permite reconstruir la línea
+  temporal completa de un tesista desde su primer clic en TikTok hasta la entrega de su Capítulo III.
+- DIM_UNIVERSIDAD permite calcular en qué universidades se logra mayor conversión y cuáles demandan 
+  más apoyo en normativas y turnitin.
+- DIM_SERVICIO garantiza que el producto cotizado por la IA coincida exactamente con la cuota cobrada
+  por Culqi y con las competencias del asesor asignado.
+
+====================================================================================================
+5. ESTRUCTURA MODULAR DE ARCHIVOS SQL IMPLEMENTADOS
+====================================================================================================
+
+Toda la infraestructura analítica se encuentra desacoplada en la carpeta 'infrastructure/sql/datamarts/':
+
+1. INICIALIZACIÓN DE ESQUEMAS:
+   - 00_init_schemas.sql: Crea los 5 esquemas lógicos en inbestiga_dw.
+
+2. DIMENSIONES CONFORMADAS:
+   - 01_shared/conformed_dimensions.sql: DIM_TIEMPO, DIM_UNIVERSIDAD, DIM_CARRERA, DIM_ESTUDIANTE, DIM_SERVICIO.
+
+3. DATA MARTS (TABLAS Y VISTAS SEPARADAS):
+   - 02_dm_buyers/01_tables.sql  |  02_dm_buyers/02_views.sql
+   - 03_dm_leads/01_tables.sql   |  03_dm_leads/02_views.sql
+   - 04_dm_payers/01_tables.sql  |  04_dm_payers/02_views.sql
+   - 05_dm_customers/01_tables.sql |  05_dm_customers/02_views.sql
+
+4. PROCEDIMIENTOS ETL INDEPENDIENTES Y ORQUESTADOR:
+   - 06_etl/etl_dm_buyers.sql: Procedimiento dbo.sp_etl_dm_buyers.
+   - 06_etl/etl_dm_leads.sql: Procedimiento dbo.sp_etl_dm_leads (con protección anti fan-out).
+   - 06_etl/etl_dm_payers.sql: Procedimiento dbo.sp_etl_dm_payers.
+   - 06_etl/etl_dm_customers.sql: Procedimiento dbo.sp_etl_dm_customers.
+   - 06_etl/sp_etl_orchestrator.sql: Procedimiento maestro dbo.sp_etl_populate_dw.
+
+5. SCRIPT MAESTRO DE COMPILACIÓN:
+   - build_all_datamarts.sql: Ejecuta toda la secuencia en orden de dependencias.
+
+====================================================================================================
+6. LINAJE DE DATOS Y TRAZABILIDAD ANALÍTICA DE PUNTA A PUNTA (DRILL-ACROSS)
+====================================================================================================
+
+Gracias a esta arquitectura, un analista o directivo puede responder interrogantes transversales 
+complejas mediante simples consultas SELECT sobre los Data Marts:
+
+Ejemplo 1: Retorno de Inversión (ROI) por Canal:
+"¿Cuánto dinero real ingresó por Culqi proveniente de tesistas captados por campañas de TikTok?"
+-> Se cruza dm_buyers.FACT_CAPTACION (Canal) con dm_payers.FACT_COBRANZA (Monto) a través de estudiante_key.
+
+Ejemplo 2: Impacto del Descuento en la Acreditación de Pago:
+"¿Los leads a quienes la IA les otorgó 15% de descuento pagaron más rápido en Culqi que los que pagaron tarifa plena?"
+-> Se cruza dm_leads.FACT_NEGOCIACION (descuento_negociado_pct) con dm_payers.FACT_COBRANZA (tiempo_confirmacion_seg).
+
+Ejemplo 3: Prevención de Abandono Académico:
+"¿Qué carreras profesionales presentan la mayor tasa de sesiones reprogramadas o en riesgo?"
+-> Se consulta dm_customers.FACT_ATENCION agrupado por dm_shared.DIM_CARRERA.
+
+CONCLUSIÓN FINAL:
+El sistema de Inteligencia de Negocios de INBESTIGA.TESIS satisface rigurosamente los estándares
+académicos de la Universidad Nacional de Trujillo y de Ralph Kimball: cero consultas operativas en 
+reporting, Data Marts por proceso de negocio claramente desacoplados, vistas de KPIs 100% dinámicas 
+sin datos hardcodeados y trazabilidad total garantizada por la Enterprise Bus Matrix.
+====================================================================================================
