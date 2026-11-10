@@ -1073,6 +1073,67 @@ export class PayersService {
       }
     }
     // =========================================================================
+    // REGLA 7.5: Consulta Detallada de Cronograma de Cuotas (consultar_cronograma_cuotas)
+    // =========================================================================
+    else if (
+      /cronograma|mis cuotas|ver cuotas|consultar.*cuotas|fechas? de pago|cu[aá]ndo vence/i.test(msgLower) &&
+      !/cambiar|reestructurar|3 cuotas|tres cuotas|6 cuotas|seis cuotas|en partes|fraccionar/i.test(msgLower)
+    ) {
+      guardrailsActivados.push('Consulta determinística de cronograma de cuotas y calendario de pagos');
+      const todasCuotas: any[] = await this.prisma.$queryRawUnsafe(`
+        SELECT numero_cuota, porcentaje, monto_programado, condicion, fecha_vencimiento, estado
+        FROM INBESTIGA_TESIS.dbo.CUOTA_PAGO
+        WHERE orden_pago_id = ${ordenPagoId}
+        ORDER BY numero_cuota ASC;
+      `);
+
+      const toolCronograma = await this.logToolExecution(
+        conversacionId,
+        ordenPagoId,
+        'consultar_cronograma_cuotas',
+        { orden_pago_id: ordenPagoId },
+        {
+          codigo_orden: orden.codigo_orden,
+          modalidad: orden.modalidad_condicion,
+          total_cuotas: todasCuotas.length,
+          monto_comprometido: orden.monto_comprometido,
+          monto_cobrado: orden.monto_cobrado,
+          cuotas: todasCuotas,
+        },
+        78,
+      );
+      herramientasEjecutadas.push(toolCronograma);
+
+      const saldo = Number(orden.monto_comprometido) - Number(orden.monto_cobrado);
+      let cronoText =
+        `📅 **Cronograma Oficial de Pagos — Orden ${orden.codigo_orden}**\n\n` +
+        `• **Servicio:** ${orden.servicio_nombre}\n` +
+        `• **Modalidad pactada:** ${orden.modalidad_condicion}\n` +
+        `• **Total comprometido:** S/ ${Number(orden.monto_comprometido).toFixed(2)}\n` +
+        `• **Monto abonado:** S/ ${Number(orden.monto_cobrado).toFixed(2)}\n` +
+        `• **Saldo pendiente:** S/ ${saldo > 0 ? saldo.toFixed(2) : '0.00'}\n\n` +
+        `📋 **Desglose de Cuotas:**\n`;
+
+      for (const c of todasCuotas) {
+        const icon = c.estado === 'PAGADA' ? '✅' : c.estado === 'ENLACE_ENVIADO' ? '🟡' : '⏳';
+        const fechaStr = c.fecha_vencimiento
+          ? new Date(c.fecha_vencimiento).toISOString().split('T')[0]
+          : 'Contra entrega de hito académico';
+        cronoText += `${icon} **Cuota #${c.numero_cuota}:** S/ ${Number(c.monto_programado).toFixed(2)} (${Number(c.porcentaje)}%) — \`${c.estado}\`\n`;
+        cronoText += `   └ Vence: ${fechaStr} | Condición: ${c.condicion || 'Entrega verificable'}\n`;
+      }
+
+      if (orden.modalidad_condicion.includes('1 pago') && Number(orden.monto_cobrado) === 0) {
+        cronoText += `\n💡 **Opciones de Flexibilidad Financiera:**\nActualmente tu orden está configurada en **1 pago al contado**. Si prefieres pagar en cuotas por hitos verificables antes de iniciar tu asesoría, solo dime **"cambiar a 3 cuotas"** o **"en 6 cuotas"** y actualizaré tu cronograma inmediatamente.`;
+      }
+
+      if (enlaceActivo) {
+        cronoText += `\n\n💳 **Enlace oficial de pago de tu cuota exigible:** ${enlaceActivo.url_enlace}`;
+      }
+
+      respuesta = cronoText;
+    }
+    // =========================================================================
     // REGLA 8: Configuración / Cambio de Modalidad y Cuotas (RN-03)
     // =========================================================================
     else if (/3 cuotas|tres cuotas|6 cuotas|seis cuotas|contado|en partes|fraccionar|cambiar.*cuotas/i.test(msgLower)) {
