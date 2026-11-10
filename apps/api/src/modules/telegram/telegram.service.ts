@@ -114,16 +114,34 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Extrae un número celular peruano de 9 dígitos del texto
+   */
+  private extraerTelefono(texto: string): string | null {
+    if (!texto) return null;
+    const regex = /(?:(?:\+?51)[\s.-]?)?(9(?:\d[\s.-]?){8})/;
+    const match = regex.exec(texto);
+    if (match && match[1]) {
+      const clean = match[1].replace(/\D/g, '');
+      if (clean.length === 9 && clean.startsWith('9')) {
+        return clean;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Procesa un mensaje entrante (desde Polling o desde Webhook)
    */
   async procesarMensajeTelegram(message: any) {
     const chatId = message.chat?.id;
-    const text = message.text || '';
+    let text = (message.text || '').trim();
     const fromUser = message.from?.first_name || 'Estudiante';
+    const contactPhone = message.contact?.phone_number;
 
-    if (!chatId || !text) return;
+    if (!chatId) return;
+    if (!text && !contactPhone) return;
 
-    this.logger.log(`[Telegram] Mensaje de @${message.from?.username || fromUser} (${chatId}): "${text}"`);
+    this.logger.log(`[Telegram] Mensaje de @${message.from?.username || fromUser} (${chatId}): "${text || contactPhone}"`);
 
     // 1. Comando /start o saludo inicial
     if (text === '/start') {
@@ -134,33 +152,110 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         `• 💳 Obtener tu enlace oficial de pasarela (Culqi / Tarjeta / Yape / Plin)\n` +
         `• 🏦 Solicitar datos de transferencia bancaria BCP / Interbank\n` +
         `• 📝 Confirmar tu contrato de asesoría y garantías\n\n` +
-        `👉 Para comenzar, indícame tu **código de orden** (ejemplo: \`ORD-2026-0001\`) o simplemente hazme tu consulta.`;
+        `👉 *Para identificarte y cargar tu expediente:* \n` +
+        `1. Presiona el botón **[📱 Compartir mi número de celular]** abajo, o\n` +
+        `2. Escribe tu **número de celular** (ejemplo: \`919632928\` o \`994 910 334\`), o\n` +
+        `3. Escribe tu **código de orden** (ejemplo: \`ORD-2026-0042\`).`;
 
-      await this.enviarMensaje(chatId, bienvenida);
+      const keyboard = {
+        keyboard: [
+          [
+            {
+              text: '📱 Compartir mi número de celular',
+              request_contact: true,
+            },
+          ],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+
+      await this.enviarMensaje(chatId, bienvenida, keyboard);
       return;
     }
 
-    // 2. Resolver o vincular sesión de orden de pago
-    let session = this.chatSessions.get(chatId);
+    // 2. Identificación por Celular (vía Botón de Contacto o escrito en texto)
+    const telDetectado = contactPhone
+      ? contactPhone.replace(/\D/g, '').slice(-9)
+      : this.extraerTelefono(text);
 
-    // Si el usuario menciona un código de orden ej. ORD-2026-0041 o ORD 41
+    if (telDetectado) {
+      const expediente = await this.payersService.buscarOrdenPorTelefono(telDetectado);
+      if (expediente) {
+        this.chatSessions.set(chatId, {
+          ordenPagoId: expediente.orden_pago_id,
+          lastActive: new Date(),
+        });
+        this.logger.log(`[Telegram] Chat ${chatId} identificado como ${expediente.nombres} ${expediente.apellidos} (Orden #${expediente.orden_pago_id})`);
+
+        const mensajeConfirmacion =
+          `✅ *¡Identidad confirmada, ${expediente.nombres} ${expediente.apellidos}!* 🎓\n\n` +
+          `📋 *Expediente vinculado:* \`${expediente.codigo_orden}\`\n` +
+          `• *Servicio:* ${expediente.servicio_nombre}\n` +
+          `• *Estado:* \`${expediente.estado}\`\n` +
+          `• *Total comprometido:* S/ ${Number(expediente.monto_comprometido).toFixed(2)}\n\n` +
+          `He vinculado tu sesión de forma segura. ¿En qué te puedo ayudar hoy? (Por ejemplo: ver cuotas, enlace de pago Culqi, pagar con Yape o reportar voucher de transferencia).`;
+
+        // Si el usuario envió SOLO el teléfono o el botón de contacto
+        const textoSinTelefono = text.replace(/(?:(?:\+?51)[\s.-]?)?(9(?:\d[\s.-]?){8})/, '').trim();
+        if (!textoSinTelefono || contactPhone) {
+          await this.enviarMensaje(chatId, mensajeConfirmacion, { remove_keyboard: true });
+          return;
+        } else {
+          // El usuario mandó teléfono + consulta en el mismo mensaje
+          await this.enviarMensaje(
+            chatId,
+            `✅ *Identidad verificada:* ${expediente.nombres} ${expediente.apellidos} (\`${expediente.codigo_orden}\`)`,
+            { remove_keyboard: true },
+          );
+          text = textoSinTelefono;
+        }
+      } else {
+        await this.enviarMensaje(
+          chatId,
+          `⚠️ No encontramos ningún expediente registrado con el número *${telDetectado}*.\n\nPor favor verifica que sea el número con el que contrataste tu asesoría o indícanos directamente tu código de orden (ejemplo: \`ORD-2026-0042\`).`,
+        );
+        return;
+      }
+    }
+
+    // 3. Identificación por Código de Orden explícito (ej. ORD-2026-0042 o ORD 42)
     const matchOrden = text.match(/ORD[-_ ]?2026[-_ ]?(\d{1,4})/i) || text.match(/\b(orden\s*#?\s*)(\d{1,3})\b/i);
     if (matchOrden) {
       const num = parseInt(matchOrden[1] || matchOrden[2], 10);
       if (num >= 1 && num <= 104) {
-        session = { ordenPagoId: num, lastActive: new Date() };
-        this.chatSessions.set(chatId, session);
-        this.logger.log(`[Telegram] Chat ${chatId} vinculado a Orden #${num}`);
+        this.chatSessions.set(chatId, { ordenPagoId: num, lastActive: new Date() });
+        this.logger.log(`[Telegram] Chat ${chatId} vinculado a Orden #${num} por código de orden`);
       }
     }
 
-    // Si no tiene orden vinculada, asignar por defecto la Orden #1 para facilitar la demo
+    // 4. Verificar si ya existe una sesión identificada
+    let session = this.chatSessions.get(chatId);
+
+    // Si aún no está identificado y la consulta no contiene orden ni teléfono
     if (!session) {
-      session = { ordenPagoId: 1, lastActive: new Date() };
-      this.chatSessions.set(chatId, session);
+      const promptIdentificacion =
+        `👋 ¡Hola ${fromUser}! Para brindarte información sobre tus cuotas o emitir tu enlace de pago oficial, necesito identificar tu expediente.\n\n` +
+        `Por favor, indícame tu **número de celular** (ejemplo: \`919632928\` o \`994 910 334\`), tu **código de orden** (ej: \`ORD-2026-0042\`), o presiona el botón inferior para compartir tu número.`;
+
+      const keyboard = {
+        keyboard: [
+          [
+            {
+              text: '📱 Compartir mi número de celular',
+              request_contact: true,
+            },
+          ],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+
+      await this.enviarMensaje(chatId, promptIdentificacion, keyboard);
+      return;
     }
 
-    // 3. Pasar el mensaje al Agente IA de Cobranza PAYERS
+    // 5. Pasar el mensaje al Agente IA de Cobranza PAYERS
     try {
       const resultado = await this.payersService.procesarChatAgente(session.ordenPagoId, text);
 
@@ -186,24 +281,31 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   /**
    * Envía un mensaje a un chat de Telegram
    */
-  async enviarMensaje(chatId: number | string, texto: string) {
+  async enviarMensaje(chatId: number | string, texto: string, replyMarkup?: any) {
     if (!this.isTokenValid()) return;
+
+    const payload: any = {
+      chat_id: chatId,
+      text: texto,
+      parse_mode: 'Markdown',
+    };
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
 
     try {
       const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
-      await axios.post(url, {
-        chat_id: chatId,
-        text: texto,
-        parse_mode: 'Markdown',
-      });
+      await axios.post(url, payload);
     } catch (error: any) {
       // Fallback sin Markdown si el formateo falla
       try {
-        const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
-        await axios.post(url, {
+        const fallbackPayload: any = {
           chat_id: chatId,
           text: texto,
-        });
+        };
+        if (replyMarkup) fallbackPayload.reply_markup = replyMarkup;
+        const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
+        await axios.post(url, fallbackPayload);
       } catch (innerError: any) {
         this.logger.error(`Error al enviar mensaje a Telegram ${chatId}: ${innerError.message}`);
       }

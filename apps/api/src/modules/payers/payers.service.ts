@@ -17,6 +17,39 @@ export class PayersService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Busca el expediente activo de un estudiante por su número de teléfono celular (9 u 11 dígitos)
+   */
+  async buscarOrdenPorTelefono(telefono: string): Promise<any> {
+    const cleanDigits = telefono.replace(/\D/g, '');
+    if (cleanDigits.length < 8) return null;
+
+    const ultimos9 = cleanDigits.slice(-9);
+
+    const rows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1
+        op.orden_pago_id,
+        op.codigo_orden,
+        ct.contacto_id,
+        ct.nombres,
+        ct.apellidos,
+        ct.telefono,
+        op.estado,
+        op.monto_comprometido,
+        s.nombre AS servicio_nombre
+      FROM INBESTIGA_TESIS.dbo.ORDEN_PAGO op
+      INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = op.propuesta_id
+      INNER JOIN INBESTIGA_TESIS.dbo.LEAD l ON l.lead_id = pr.lead_id
+      INNER JOIN INBESTIGA_TESIS.dbo.BUYER b ON b.buyer_id = l.buyer_id
+      INNER JOIN INBESTIGA_TESIS.dbo.CONTACTO ct ON ct.contacto_id = b.contacto_id
+      INNER JOIN INBESTIGA_TESIS.dbo.SERVICIO s ON s.servicio_id = pr.servicio_id
+      WHERE ct.telefono LIKE '%${ultimos9}%' OR ct.telefono LIKE '%${cleanDigits}%'
+      ORDER BY op.orden_pago_id DESC;
+    `);
+
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  /**
    * 1. GET /api/v1/payers/overview
    * Retorna el Reporte BI R-PAYERS completo desde INBESTIGA_MART + contadores operativos desde INBESTIGA_TESIS
    * Todas las consultas se ejecutan de forma estrictamente secuencial (connection_limit=1).
