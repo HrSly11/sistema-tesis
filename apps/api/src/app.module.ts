@@ -16,6 +16,7 @@ import { EtlModule } from './modules/etl/etl.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { PayersModule } from './modules/payers/payers.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { PayersModule } from './modules/payers/payers.module';
     DashboardModule,
     AlertsModule,
     PayersModule,
+    TelegramModule,
   ],
 })
 export class AppModule {}
