@@ -157,16 +157,32 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     // 2. Comando /start o saludo inicial
     if (text === '/start') {
       if (expediente) {
-        // Estudiante ya registrado en la BD: saludo directo con su expediente activo
-        const bienvenidaRegistrado =
-          `👋 ¡Hola **${expediente.nombres}**! Bienvenido de vuelta a **INBESTIGA** 🎓.\n\n` +
-          `📋 *Tu expediente activo:* \`${expediente.codigo_orden}\`\n` +
-          `• *Servicio:* ${expediente.servicio_nombre}\n` +
-          `• *Estado:* \`${expediente.estado}\`\n` +
-          `• *Total:* S/ ${Number(expediente.monto_comprometido).toFixed(2)}\n\n` +
-          `¿En qué puedo ayudarte hoy? Puedes solicitar tu enlace oficial de pago Culqi, cambiar a cuotas, pagar con Yape o reportar una transferencia.`;
-        await this.enviarMensaje(chatId, bienvenidaRegistrado);
-        return;
+        // Estudiante ya registrado en la BD: el agente consulta su orden y emite su enlace directamente
+        try {
+          const resultado = await this.payersService.procesarChatAgente(
+            expediente.orden_pago_id,
+            'consultar estado de mi orden y enlace de pago',
+          );
+          let respuestaFinal = resultado.respuesta;
+          if (resultado.herramientasEjecutadas && resultado.herramientasEjecutadas.length > 0) {
+            const toolsNames = resultado.herramientasEjecutadas
+              .map((t: any) => `\`${t.herramienta}\``)
+              .join(', ');
+            respuestaFinal += `\n\n🛠️ *Herramientas ejecutadas:* ${toolsNames}`;
+          }
+          await this.enviarMensaje(chatId, respuestaFinal);
+          return;
+        } catch {
+          const bienvenidaRegistrado =
+            `👋 ¡Hola **${expediente.nombres}**! Bienvenido a **INBESTIGA** 🎓.\n\n` +
+            `📋 *Tu expediente activo:* \`${expediente.codigo_orden}\`\n` +
+            `• *Servicio:* ${expediente.servicio_nombre}\n` +
+            `• *Estado:* \`${expediente.estado}\`\n` +
+            `• *Total:* S/ ${Number(expediente.monto_comprometido).toFixed(2)}\n\n` +
+            `¿En qué puedo ayudarte hoy? Puedes solicitar tu enlace oficial de pago Culqi, cambiar a cuotas, pagar con Yape o reportar una transferencia.`;
+          await this.enviarMensaje(chatId, bienvenidaRegistrado);
+          return;
+        }
       }
 
       // Estudiante nuevo en Telegram: solicitar vinculación sin exponer datos de prueba
