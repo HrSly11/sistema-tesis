@@ -50,6 +50,51 @@ export class PayersService {
   }
 
   /**
+   * Busca el expediente activo por el ID de chat de Telegram persistido en la BD
+   */
+  async buscarOrdenPorTelegramChatId(chatId: string | number): Promise<any> {
+    const chatIdStr = String(chatId);
+    const rows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1
+        op.orden_pago_id,
+        op.codigo_orden,
+        ct.contacto_id,
+        ct.nombres,
+        ct.apellidos,
+        ct.telefono,
+        ct.telegram_chat_id,
+        ct.telegram_username,
+        op.estado,
+        op.monto_comprometido,
+        s.nombre AS servicio_nombre
+      FROM INBESTIGA_TESIS.dbo.ORDEN_PAGO op
+      INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = op.propuesta_id
+      INNER JOIN INBESTIGA_TESIS.dbo.LEAD l ON l.lead_id = pr.lead_id
+      INNER JOIN INBESTIGA_TESIS.dbo.BUYER b ON b.buyer_id = l.buyer_id
+      INNER JOIN INBESTIGA_TESIS.dbo.CONTACTO ct ON ct.contacto_id = b.contacto_id
+      INNER JOIN INBESTIGA_TESIS.dbo.SERVICIO s ON s.servicio_id = pr.servicio_id
+      WHERE ct.telegram_chat_id = '${chatIdStr}'
+      ORDER BY op.orden_pago_id DESC;
+    `);
+
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  /**
+   * Vincula permanentemente el chat_id y username de Telegram al contacto en la BD
+   */
+  async vincularTelegramChatId(contactoId: number, chatId: string | number, username?: string): Promise<void> {
+    const chatIdStr = String(chatId);
+    const userStr = username ? `'${username.replace(/'/g, "''")}'` : 'NULL';
+    await this.prisma.$executeRawUnsafe(`
+      UPDATE INBESTIGA_TESIS.dbo.CONTACTO
+      SET telegram_chat_id = '${chatIdStr}',
+          telegram_username = ${userStr}
+      WHERE contacto_id = ${contactoId};
+    `);
+  }
+
+  /**
    * 1. GET /api/v1/payers/overview
    * Retorna el Reporte BI R-PAYERS completo desde INBESTIGA_MART + contadores operativos desde INBESTIGA_TESIS
    * Todas las consultas se ejecutan de forma estrictamente secuencial (connection_limit=1).

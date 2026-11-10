@@ -143,19 +143,43 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(`[Telegram] Mensaje de @${message.from?.username || fromUser} (${chatId}): "${text || contactPhone}"`);
 
-    // 1. Comando /start o saludo inicial
+    // 1. Verificar si este chat_id de Telegram ya está registrado permanentemente en la Base de Datos
+    let expediente = await this.payersService.buscarOrdenPorTelegramChatId(chatId);
+    let session = this.chatSessions.get(chatId);
+
+    if (expediente) {
+      if (!session || session.ordenPagoId !== expediente.orden_pago_id) {
+        session = { ordenPagoId: expediente.orden_pago_id, lastActive: new Date() };
+        this.chatSessions.set(chatId, session);
+      }
+    }
+
+    // 2. Comando /start o saludo inicial
     if (text === '/start') {
-      const bienvenida =
+      if (expediente) {
+        // Estudiante ya registrado en la BD: saludo directo con su expediente activo
+        const bienvenidaRegistrado =
+          `👋 ¡Hola **${expediente.nombres}**! Bienvenido de vuelta a **INBESTIGA** 🎓.\n\n` +
+          `📋 *Tu expediente activo:* \`${expediente.codigo_orden}\`\n` +
+          `• *Servicio:* ${expediente.servicio_nombre}\n` +
+          `• *Estado:* \`${expediente.estado}\`\n` +
+          `• *Total:* S/ ${Number(expediente.monto_comprometido).toFixed(2)}\n\n` +
+          `¿En qué puedo ayudarte hoy? Puedes solicitar tu enlace oficial de pago Culqi, cambiar a cuotas, pagar con Yape o reportar una transferencia.`;
+        await this.enviarMensaje(chatId, bienvenidaRegistrado);
+        return;
+      }
+
+      // Estudiante nuevo en Telegram: solicitar vinculación sin exponer datos de prueba
+      const bienvenidaNuevo =
         `👋 ¡Hola **${fromUser}**! Te saluda el Agente Virtual de Cobranza y Activación de **INBESTIGA** 🎓.\n\n` +
         `Puedo ayudarte a:\n` +
         `• 📋 Consultar el estado de tu expediente y cronograma de cuotas\n` +
         `• 💳 Obtener tu enlace oficial de pasarela (Culqi / Tarjeta / Yape / Plin)\n` +
         `• 🏦 Solicitar datos de transferencia bancaria BCP / Interbank\n` +
         `• 📝 Confirmar tu contrato de asesoría y garantías\n\n` +
-        `👉 *Para identificarte y cargar tu expediente:* \n` +
+        `👉 *Para vincular permanentemente tu cuenta:* \n` +
         `1. Presiona el botón **[📱 Compartir mi número de celular]** abajo, o\n` +
-        `2. Escribe tu **número de celular** (ejemplo: \`919632928\` o \`994 910 334\`), o\n` +
-        `3. Escribe tu **código de orden** (ejemplo: \`ORD-2026-0042\`).`;
+        `2. Escribe tu **número de celular** registrado al contratar tu asesoría.`;
 
       const keyboard = {
         keyboard: [
@@ -170,31 +194,39 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         one_time_keyboard: true,
       };
 
-      await this.enviarMensaje(chatId, bienvenida, keyboard);
+      await this.enviarMensaje(chatId, bienvenidaNuevo, keyboard);
       return;
     }
 
-    // 2. Identificación por Celular (vía Botón de Contacto o escrito en texto)
+    // 3. Identificación y Registro permanente por Celular (vía Botón de Contacto o escrito en texto)
     const telDetectado = contactPhone
       ? contactPhone.replace(/\D/g, '').slice(-9)
       : this.extraerTelefono(text);
 
     if (telDetectado) {
-      const expediente = await this.payersService.buscarOrdenPorTelefono(telDetectado);
-      if (expediente) {
-        this.chatSessions.set(chatId, {
-          ordenPagoId: expediente.orden_pago_id,
+      const expEncontrado = await this.payersService.buscarOrdenPorTelefono(telDetectado);
+      if (expEncontrado) {
+        // Persistir permanentemente el chat_id y username de Telegram en la BD (INBESTIGA_TESIS.dbo.CONTACTO)
+        await this.payersService.vincularTelegramChatId(
+          expEncontrado.contacto_id,
+          chatId,
+          message.from?.username,
+        );
+
+        session = {
+          ordenPagoId: expEncontrado.orden_pago_id,
           lastActive: new Date(),
-        });
-        this.logger.log(`[Telegram] Chat ${chatId} identificado como ${expediente.nombres} ${expediente.apellidos} (Orden #${expediente.orden_pago_id})`);
+        };
+        this.chatSessions.set(chatId, session);
+        this.logger.log(`[Telegram] Contacto #${expEncontrado.contacto_id} (${expEncontrado.nombres}) vinculado permanentemente a Telegram chat_id ${chatId}`);
 
         const mensajeConfirmacion =
-          `✅ *¡Identidad confirmada, ${expediente.nombres} ${expediente.apellidos}!* 🎓\n\n` +
-          `📋 *Expediente vinculado:* \`${expediente.codigo_orden}\`\n` +
-          `• *Servicio:* ${expediente.servicio_nombre}\n` +
-          `• *Estado:* \`${expediente.estado}\`\n` +
-          `• *Total comprometido:* S/ ${Number(expediente.monto_comprometido).toFixed(2)}\n\n` +
-          `He vinculado tu sesión de forma segura. ¿En qué te puedo ayudar hoy? (Por ejemplo: ver cuotas, enlace de pago Culqi, pagar con Yape o reportar voucher de transferencia).`;
+          `✅ *¡Cuenta vinculada con éxito, ${expEncontrado.nombres} ${expEncontrado.apellidos}!* 🎓\n\n` +
+          `Tu usuario de Telegram ha quedado registrado permanentemente en nuestro sistema con tu expediente \`${expEncontrado.codigo_orden}\`.\n\n` +
+          `• *Servicio:* ${expEncontrado.servicio_nombre}\n` +
+          `• *Estado:* \`${expEncontrado.estado}\`\n` +
+          `• *Total comprometido:* S/ ${Number(expEncontrado.monto_comprometido).toFixed(2)}\n\n` +
+          `A partir de ahora te reconoceré automáticamente sin pedirte tus datos. ¿En qué te puedo ayudar hoy? (Por ejemplo: ver cuotas, enlace de pago Culqi, pagar con Yape o reportar voucher de transferencia).`;
 
         // Si el usuario envió SOLO el teléfono o el botón de contacto
         const textoSinTelefono = text.replace(/(?:(?:\+?51)[\s.-]?)?(9(?:\d[\s.-]?){8})/, '').trim();
@@ -205,7 +237,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           // El usuario mandó teléfono + consulta en el mismo mensaje
           await this.enviarMensaje(
             chatId,
-            `✅ *Identidad verificada:* ${expediente.nombres} ${expediente.apellidos} (\`${expediente.codigo_orden}\`)`,
+            `✅ *Cuenta registrada:* ${expEncontrado.nombres} ${expEncontrado.apellidos} (\`${expEncontrado.codigo_orden}\`)`,
             { remove_keyboard: true },
           );
           text = textoSinTelefono;
@@ -213,30 +245,28 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       } else {
         await this.enviarMensaje(
           chatId,
-          `⚠️ No encontramos ningún expediente registrado con el número *${telDetectado}*.\n\nPor favor verifica que sea el número con el que contrataste tu asesoría o indícanos directamente tu código de orden (ejemplo: \`ORD-2026-0042\`).`,
+          `⚠️ No encontramos ningún expediente registrado con el número *${telDetectado}*.\n\nPor favor verifica que sea el número con el que contrataste tu asesoría o indícanos directamente tu código de orden.`,
         );
         return;
       }
     }
 
-    // 3. Identificación por Código de Orden explícito (ej. ORD-2026-0042 o ORD 42)
+    // 4. Identificación por Código de Orden explícito (ej. ORD-2026-0042 o ORD 42)
     const matchOrden = text.match(/ORD[-_ ]?2026[-_ ]?(\d{1,4})/i) || text.match(/\b(orden\s*#?\s*)(\d{1,3})\b/i);
     if (matchOrden) {
       const num = parseInt(matchOrden[1] || matchOrden[2], 10);
       if (num >= 1 && num <= 104) {
-        this.chatSessions.set(chatId, { ordenPagoId: num, lastActive: new Date() });
+        session = { ordenPagoId: num, lastActive: new Date() };
+        this.chatSessions.set(chatId, session);
         this.logger.log(`[Telegram] Chat ${chatId} vinculado a Orden #${num} por código de orden`);
       }
     }
 
-    // 4. Verificar si ya existe una sesión identificada
-    let session = this.chatSessions.get(chatId);
-
-    // Si aún no está identificado y la consulta no contiene orden ni teléfono
+    // 5. Verificar si ya existe una sesión identificada
     if (!session) {
       const promptIdentificacion =
         `👋 ¡Hola ${fromUser}! Para brindarte información sobre tus cuotas o emitir tu enlace de pago oficial, necesito identificar tu expediente.\n\n` +
-        `Por favor, indícame tu **número de celular** (ejemplo: \`919632928\` o \`994 910 334\`), tu **código de orden** (ej: \`ORD-2026-0042\`), o presiona el botón inferior para compartir tu número.`;
+        `Por favor, presiona el botón inferior para compartir tu número o escribe tu celular registrado al contratar tu asesoría.`;
 
       const keyboard = {
         keyboard: [
