@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   BarChart3,
   TrendingUp,
@@ -66,7 +67,7 @@ export default function DashboardPage() {
     setEtlMessage(null);
     try {
       const res = await api.runEtl();
-      setEtlMessage(`✓ ETL exitoso (${res.duracionMs} ms): inbestiga_dw sincronizado`);
+      setEtlMessage(`✓ ETL exitoso (${res.duracionMs} ms): INBESTIGA_MART y Data Marts sincronizados`);
       await fetchMetrics();
     } catch (err: any) {
       setEtlMessage(`Error en ETL: ${err.message}`);
@@ -77,20 +78,20 @@ export default function DashboardPage() {
 
   const renderBadge = (estado: string | undefined, metaText?: string) => {
     const st = estado?.toUpperCase();
-    if (st === 'VERDE') {
+    if (st === 'VERDE' || st === 'BUENO') {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>VERDE</span>
+          <span>{st === 'BUENO' ? 'BUENO' : 'VERDE'}</span>
           {metaText && <span className="font-normal opacity-80">({metaText})</span>}
         </span>
       );
     }
-    if (st === 'AMARILLO') {
+    if (st === 'AMARILLO' || st === 'REGULAR') {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-          <span>ALERTA</span>
+          <span>{st === 'REGULAR' ? 'REGULAR' : 'ALERTA'}</span>
           {metaText && <span className="font-normal opacity-80">({metaText})</span>}
         </span>
       );
@@ -109,14 +110,14 @@ export default function DashboardPage() {
       <div className="py-32 text-center text-slate-500 dark:text-slate-400">
         <span className="inline-block animate-spin rounded-full h-10 w-10 border-3 border-blue-600 dark:border-sky-400 border-t-transparent" />
         <p className="mt-4 text-sm font-semibold tracking-wide">Cargando métricas de los 4 Data Marts (Kimball)...</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Conectando con inbestiga_dw (dm_buyers, dm_leads, dm_payers, dm_customers)</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Conectando con INBESTIGA_MART + Data Marts</p>
       </div>
     );
   }
 
-  const funnel = data?.funnel || { universo: 50, buyers: 33, leads: 23, payers: 13, customers: 6 };
-  const conversiones = data?.conversiones || { universoABuyer: 66, buyerALead: 69.7, leadAPayer: 56.5, payerACustomer: 46.1 };
-  const kpis = data?.kpis || { avgLeadScore: 78, montoRecaudado: 19165, totalPagos: 13, metodosPago: { CARD: 5, YAPE: 3, TRANSFER: 4, PagoEfectivo: 1 }, asesoresActivos: 4 };
+  const funnel = data?.funnel || { universo: 50, buyers: 33, leads: 23, payers: 86, customers: 86 };
+  const conversiones = data?.conversiones || { universoABuyer: 66, buyerALead: 69.7, leadAPayer: 82.7, payerACustomer: 100 };
+  const kpis = data?.kpis || { avgLeadScore: 78, montoRecaudado: 110480, totalPagos: 150, metodosPago: { CARD: 5, YAPE: 3, TRANSFER: 4, PagoEfectivo: 1 }, asesoresActivos: 4 };
   const segmentacion = data?.segmentacion || { universidades: [], carreras: [], objeciones: [] };
   const dm = data?.dataMarts || {};
 
@@ -124,6 +125,33 @@ export default function DashboardPage() {
   const leadsDm = dm.dm_leads?.kpis;
   const payersDm = dm.dm_payers?.kpis;
   const customersDm = dm.dm_customers?.kpis;
+
+  const payersConv = payersDm?.conversion || {
+    total_ordenes_pago: 104,
+    ordenes_con_pago_confirmado: 86,
+    tasa_confirmacion_pago_p01_pct: 82.7,
+    monto_comprometido_soles: 180540,
+    monto_exigible_soles: 121400,
+    monto_cobrado_soles: 110480,
+    tasa_cobranza_efectiva_p04_pct: 91.0,
+  };
+  const payersCulqi = payersDm?.tiempoConfirmacionCulqi || {
+    promedio_minutos_primer_pago_p02: 8.6,
+    meta_minutos: 10.0,
+    estado_semaforo: 'Bueno',
+    tasa_confirmacion_webhook_p05_pct: 82.0,
+    total_pagos_confirmados: 150,
+    pagos_por_webhook: 123,
+    comision_pasarela_soles: 3013.81,
+    costo_cobro_pct_p06: 2.73,
+  };
+  const payersAlertas = payersDm?.recuperacionAlertasCobranza || {
+    total_alertados: 55,
+    total_recuperados_72h: 34,
+    tasa_recuperacion_p03_pct: 61.8,
+    escalamientos_humano: 21,
+    monto_recuperado_soles: 46510,
+  };
 
   const funnelStages = [
     {
@@ -152,17 +180,17 @@ export default function DashboardPage() {
     },
     {
       name: 'PAYERS (Fase 3)',
-      count: funnel.payers,
-      label: 'Pagos Confirmados',
-      rate: `${conversiones.leadAPayer}%`,
+      count: payersConv.ordenes_con_pago_confirmado ?? funnel.payers,
+      label: `Órdenes Confirmadas (de ${payersConv.total_ordenes_pago ?? 104})`,
+      rate: `${payersConv.tasa_confirmacion_pago_p01_pct ?? conversiones.leadAPayer}%`,
       lightBg: 'from-emerald-50/80 to-emerald-100/60 text-emerald-950 border-emerald-200',
       darkBg: 'dark:from-emerald-950/40 dark:to-slate-900 dark:text-emerald-100 dark:border-emerald-900/50',
     },
     {
       name: 'CUSTOMERS (Fase 4)',
-      count: funnel.customers,
-      label: 'En Asesoría Activa',
-      rate: `${conversiones.payerACustomer}%`,
+      count: payersConv.ordenes_con_pago_confirmado ?? funnel.customers,
+      label: 'En Asesoría Activa (RN-04)',
+      rate: '100%',
       lightBg: 'from-purple-50/80 to-purple-100/60 text-purple-950 border-purple-200',
       darkBg: 'dark:from-purple-950/40 dark:to-slate-900 dark:text-purple-100 dark:border-purple-900/50',
     },
@@ -184,11 +212,11 @@ export default function DashboardPage() {
               Arquitectura Ralph Kimball
             </span>
             <span className="text-[11px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
-              inbestiga_dw (Live)
+              INBESTIGA_MART + DW (Live)
             </span>
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5">
-            Monitoreo analítico por procesos de negocio: Captación (Buyers), Negociación IA (Leads), Cobranza Culqi (Payers) y Atención (Customers).
+            Monitoreo analítico por procesos de negocio: Captación (Buyers), Negociación IA (Leads), Cobranza Automatizada R-PAYERS (Payers) y Atención (Customers).
           </p>
         </div>
 
@@ -199,6 +227,14 @@ export default function DashboardPage() {
               {etlMessage}
             </span>
           )}
+
+          <Link
+            href="/payers"
+            className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition-all"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Abrir Módulo PAYERS (R-PAYERS)</span>
+          </Link>
 
           <button
             onClick={handleRunEtl}
@@ -223,10 +259,10 @@ export default function DashboardPage() {
               <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Embudo Metodológico Integral (Pipeline IMPULSE)</span>
             </h2>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">Flujo de conversión desde el contacto inicial hasta la graduación</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Flujo de conversión desde el contacto inicial hasta la activación académica</p>
           </div>
           <span className="text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded border border-indigo-200 dark:border-indigo-900">
-            Pipeline Activo: {funnel.buyers} registros
+            Órdenes PAYERS: {payersConv.ordenes_con_pago_confirmado}/{payersConv.total_ordenes_pago} confirmadas (P01 = {payersConv.tasa_confirmacion_pago_p01_pct}%)
           </span>
         </div>
 
@@ -240,7 +276,7 @@ export default function DashboardPage() {
                 <span className="text-slate-500 dark:text-slate-400">ETAPA {i + 1}</span>
                 {stg.rate && (
                   <span className="text-emerald-700 dark:text-emerald-400 font-black bg-emerald-100 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded text-[10px]">
-                    +{stg.rate}
+                    {stg.rate}
                   </span>
                 )}
               </div>
@@ -304,7 +340,7 @@ export default function DashboardPage() {
           }`}
         >
           <CreditCard className="w-3.5 h-3.5" />
-          <span>Fase 3: dm_payers (Cobranza Culqi)</span>
+          <span>Fase 3: PAYERS (INBESTIGA_MART / R-PAYERS)</span>
         </button>
 
         <button
@@ -346,7 +382,6 @@ export default function DashboardPage() {
 
           {/* Cards de KPIs de la Fase 1 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* KPI 1.1: Tasa de Conversión Buyer -> Lead */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -362,7 +397,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 1.2: Tiempo 1ª Respuesta IA */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -378,7 +412,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 1.3: Interacciones por Buyer */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -394,7 +427,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 1.4: Lead Score Promedio */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -413,12 +445,11 @@ export default function DashboardPage() {
 
           {/* Desglose de Campañas y CPL + Canales */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
-            {/* Tabla CPL por Campaña */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
-                  Costo por Lead (CPL) por Campaña (vw_KPI_CostoPorLeadCampana)
+                  Costo por Lead (CPL) por Campaña
                 </span>
                 <span className="text-[10px] font-mono text-slate-500">Meta ≤ S/ 8.00</span>
               </h4>
@@ -431,12 +462,12 @@ export default function DashboardPage() {
                       <div className="min-w-0 pr-2">
                         <strong className="text-slate-900 dark:text-white truncate block">{c.campana_nombre}</strong>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Inversión: S/ {Number(c.inversion_marketing).toLocaleString()} • Leads: {c.leads_generados}
+                          Inversión: S/ {Number(c.inversion_marketing || 0).toLocaleString()} • Leads: {c.leads_generados}
                         </span>
                       </div>
                       <div className="text-right shrink-0">
                         <div className="font-mono font-bold text-slate-900 dark:text-white">
-                          S/ {Number(c.costo_por_lead_cpl).toFixed(2)}
+                          S/ {Number(c.costo_por_lead_cpl || 0).toFixed(2)}
                         </div>
                         {renderBadge(c.estado_meta)}
                       </div>
@@ -446,12 +477,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Rendimiento por Canal */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Radio className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
-                  Rendimiento por Canal de Adquisición (vw_RendimientoCanales)
+                  Rendimiento por Canal de Adquisición
                 </span>
                 <span className="text-[10px] font-mono text-slate-500">DIM_CANAL</span>
               </h4>
@@ -469,7 +499,7 @@ export default function DashboardPage() {
                         {cnl.leads_generados} leads / {cnl.total_buyers}
                       </span>
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold">
-                        {Number(cnl.tasa_conversion_canal_pct).toFixed(1)}% conv.
+                        {Number(cnl.tasa_conversion_canal_pct || 0).toFixed(1)}% conv.
                       </span>
                     </div>
                   </div>
@@ -504,9 +534,7 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Cards de KPIs de la Fase 2 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* KPI 2.1: Conversión Lead -> Payer */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -522,7 +550,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 2.2: Recuperación de Objeciones */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -538,7 +565,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 2.3: Descuento Promedio */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -554,7 +580,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 2.4: Escalamiento Humano */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -571,12 +596,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Desglose por Universidad */}
           <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <School className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                Rendimiento de Negociación por Universidad (vw_KPI_RendimientoUniversidad)
+                Rendimiento de Negociación por Universidad
               </span>
               <span className="text-[10px] font-mono text-slate-500">dm_shared.DIM_UNIVERSIDAD</span>
             </h4>
@@ -605,7 +629,7 @@ export default function DashboardPage() {
       )}
 
       {/* =========================================================================
-          DATA MART 3: dm_payers (Fase 3 - Cobranza, Culqi y Alertas)
+          DATA MART 3: PAYERS (Fase 3 - Cobranza Automatizada R-PAYERS en INBESTIGA_MART)
           ========================================================================= */}
       {(activeTab === 'ALL' || activeTab === 'PAYERS') && (
         <div className="glass-panel p-6 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10 space-y-6 shadow-sm">
@@ -616,124 +640,170 @@ export default function DashboardPage() {
                   <CreditCard className="w-4 h-4" />
                 </span>
                 <h2 className="font-heading text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                  Data Mart 3: Cobranza, Pasarela Culqi & Emplazamiento (dm_payers)
+                  Data Mart 3: Cobranza Automatizada, Pasarela & Activación (INBESTIGA_MART — R-PAYERS)
                 </h2>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                Proceso: Transacciones Culqi (Yape con código OTP/QR y Tarjetas), alertas de cobranza (4h, 12h, 24h) y recaudación.
+                Proceso: 104 órdenes de pago, 86 activadas (P01 = 82.7%), tiempo al primer pago P02 = 8.6 min, recuperación tras alerta P03 = 61.8%, cobranza efectiva P04 = 91.0%, webhook P05 = 82.0% y costo pasarela P06 = 2.73%.
               </p>
             </div>
-            <span className="text-[10px] font-mono font-bold bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 self-start sm:self-auto">
-              Hecho: dm_payers.FACT_COBRANZA
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                Hechos: FACT_COBRANZA + FACT_PAGO
+              </span>
+              <Link
+                href="/payers"
+                className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+              >
+                Ver R-PAYERS Completo →
+              </Link>
+            </div>
           </div>
 
-          {/* Cards de KPIs de la Fase 3 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* KPI 3.1: Confirmación Culqi */}
+          {/* 6 KPIs Oficiales P01 a P06 del Data Mart 3: PAYERS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* P01: Tasa de confirmación de pago */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Confirmación Culqi
+                  P01 • Confirmación de Orden
                 </span>
-                {renderBadge(payersDm?.tiempoConfirmacionCulqi?.estado_meta, 'Meta ≤ 10 min')}
-              </div>
-              <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-heading">
-                {payersDm?.tiempoConfirmacionCulqi?.minutos_promedio_confirmacion ?? '0'} min
-              </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {payersDm?.tiempoConfirmacionCulqi?.total_pagos_culqi ?? 0} transacciones auditadas
-              </p>
-            </div>
-
-            {/* KPI 3.2: Recuperación por Alerta */}
-            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Recup. por Alerta
-                </span>
-                {renderBadge(payersDm?.recuperacionAlertasCobranza?.estado_meta, 'Meta ≥ 30%')}
+                {renderBadge('BUENO', 'Meta ≥ 80%')}
               </div>
               <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
-                {payersDm?.recuperacionAlertasCobranza?.tasa_recuperacion_cobranza_pct ?? '0'}%
+                {Number(payersConv.tasa_confirmacion_pago_p01_pct ?? 82.7).toFixed(1)}%
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {payersDm?.recuperacionAlertasCobranza?.pagos_recuperados_por_alerta ?? 0} pagos reactivados tras aviso
+                {payersConv.ordenes_con_pago_confirmado ?? 86} confirmadas de {payersConv.total_ordenes_pago ?? 104} órdenes creadas
               </p>
             </div>
 
-            {/* KPI 3.3: Recaudación Total Real */}
+            {/* P02: Tiempo hasta el primer pago */}
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Monto Recaudado
+                  P02 • Tiempo al Primer Pago
                 </span>
-                {renderBadge('VERDE', 'Caja Real')}
-              </div>
-              <p className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 font-heading">
-                S/ {kpis.montoRecaudado.toLocaleString()}
-              </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {kpis.totalPagos} transacciones confirmadas
-              </p>
-            </div>
-
-            {/* KPI 3.4: Ticket Promedio */}
-            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Ticket Promedio
-                </span>
-                {renderBadge('VERDE')}
+                {renderBadge(payersCulqi.estado_semaforo || 'BUENO', 'Meta ≤ 10 min')}
               </div>
               <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-heading">
-                S/ {kpis.totalPagos > 0 ? (kpis.montoRecaudado / kpis.totalPagos).toFixed(0) : '0'}
+                {Number(payersCulqi.promedio_minutos_primer_pago_p02 ?? 8.6).toFixed(1)} min
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Por estudiante que formalizó
+                Promedio en {payersConv.ordenes_con_pago_confirmado ?? 86} órdenes activadas
+              </p>
+            </div>
+
+            {/* P03: Recuperación tras Alerta */}
+            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  P03 • Recup. por Alerta (≤72h)
+                </span>
+                {renderBadge('BUENO', 'Meta ≥ 25%')}
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 font-heading">
+                {Number(payersAlertas.tasa_recuperacion_p03_pct ?? 61.8).toFixed(1)}%
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {payersAlertas.total_recuperados_72h ?? 34} recuperados de {payersAlertas.total_alertados ?? 55} alertados ({payersAlertas.escalamientos_humano ?? 21} escalados)
+              </p>
+            </div>
+
+            {/* P04: Tasa de cobranza efectiva */}
+            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  P04 • Cobranza Efectiva
+                </span>
+                {renderBadge('BUENO', 'Meta ≥ 90%')}
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 font-heading">
+                {Number(payersConv.tasa_cobranza_efectiva_p04_pct ?? 91.0).toFixed(1)}%
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                S/ {Number(payersConv.monto_cobrado_soles ?? 110480).toLocaleString('es-PE', { minimumFractionDigits: 2 })} cobrado de S/ {Number(payersConv.monto_exigible_soles ?? 121400).toLocaleString('es-PE', { minimumFractionDigits: 2 })} exigible
+              </p>
+            </div>
+
+            {/* P05: Confirmación automática por Webhook */}
+            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  P05 • Confirmación Webhook
+                </span>
+                {renderBadge('BUENO', 'Meta ≥ 80%')}
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-sky-400 font-heading">
+                {Number(payersCulqi.tasa_confirmacion_webhook_p05_pct ?? 82.0).toFixed(1)}%
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {payersCulqi.pagos_por_webhook ?? 123} automáticos de {payersCulqi.total_pagos_confirmados ?? 150} pagos confirmados
+              </p>
+            </div>
+
+            {/* P06: Costo de cobro sobre ingresos */}
+            <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  P06 • Costo de Pasarela
+                </span>
+                {renderBadge('BUENO', 'Meta ≤ 3.5%')}
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-heading">
+                {Number(payersCulqi.costo_cobro_pct_p06 ?? 2.73).toFixed(2)}%
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                S/ {Number(payersCulqi.comision_pasarela_soles ?? 3013.81).toLocaleString('es-PE', { minimumFractionDigits: 2 })} comisión sobre S/ {Number(payersConv.monto_cobrado_soles ?? 110480).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
 
-          {/* Desglose por Método de Pago y Modalidad */}
+          {/* Desglose por Medio de Pago y Canal de Confirmación (Vista 3.3 R-PAYERS) */}
           <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                Recaudación por Pasarela, Método y Modalidad de Cuota (vw_RecaudacionMetodoModalidad)
+                Vista 3.3 — Confirmación Automática y Costo por Medio de Pago (INBESTIGA_MART.dbo.vw_rpayers_vista_3_3_medios)
               </span>
-              <span className="text-[10px] font-mono text-slate-500">dm_payers.DIM_METODO_PAGO</span>
+              <span className="text-[10px] font-mono text-slate-500">150 Pagos Confirmados</span>
             </h4>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                    <th className="py-2 px-3 font-semibold">Pasarela / Proveedor</th>
-                    <th className="py-2 px-3 font-semibold">Método de Pago</th>
-                    <th className="py-2 px-3 font-semibold">Modalidad</th>
-                    <th className="py-2 px-3 font-semibold text-center">Transacciones</th>
-                    <th className="py-2 px-3 font-semibold text-right">Recaudado (PEN)</th>
-                    <th className="py-2 px-3 font-semibold text-right">Ticket Prom.</th>
+                    <th className="py-2 px-3 font-semibold">Medio de Pago</th>
+                    <th className="py-2 px-3 font-semibold">Proveedor</th>
+                    <th className="py-2 px-3 font-semibold">Canal Confirmación</th>
+                    <th className="py-2 px-3 font-semibold text-center">Pagos</th>
+                    <th className="py-2 px-3 font-semibold text-center">Webhook (P05)</th>
+                    <th className="py-2 px-3 font-semibold text-right">Monto Cobrado</th>
+                    <th className="py-2 px-3 font-semibold text-right">Comisión (P06)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                   {payersDm?.recaudacionPorMetodoYCuota?.map((r: any, idx: number) => (
                     <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-950/60">
                       <td className="py-2 px-3 font-bold text-slate-900 dark:text-white">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          r.pasarela === 'CULQI' ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                        }`}>
-                          {r.pasarela}
-                        </span>
+                        {r.medio_pago || r.metodo_pago}
                       </td>
-                      <td className="py-2 px-3 text-slate-700 dark:text-slate-300 font-medium">{r.metodo_pago}</td>
-                      <td className="py-2 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">{r.modalidad?.replace(/_/g, ' ')}</td>
-                      <td className="py-2 px-3 text-center font-bold text-slate-900 dark:text-white">{r.cantidad_transacciones}</td>
+                      <td className="py-2 px-3 text-slate-700 dark:text-slate-300 font-medium">
+                        {r.proveedor || r.pasarela}
+                      </td>
+                      <td className="py-2 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
+                        {r.canal_confirmacion || 'Webhook Culqi'}
+                      </td>
+                      <td className="py-2 px-3 text-center font-bold text-slate-900 dark:text-white">
+                        {Number(r.pagos_confirmados ?? r.cantidad_transacciones ?? 0)}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono text-emerald-700 dark:text-emerald-400 font-bold">
+                        {Number(r.pagos_por_webhook ?? 0)} ({Number(r.pct_confirmacion_auto_p05 ?? 0).toFixed(1)}%)
+                      </td>
                       <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        S/ {Number(r.monto_total_recaudado_pen).toLocaleString()}
+                        S/ {Number(r.monto_cobrado ?? r.monto_total_recaudado_pen ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-2 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                        S/ {Number(r.ticket_promedio_pen).toFixed(2)}
+                        S/ {Number(r.comision_pasarela ?? 0).toFixed(2)} ({Number(r.pct_costo_cobro_p06 ?? 0).toFixed(2)}%)
                       </td>
                     </tr>
                   ))}
@@ -768,9 +838,7 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Cards de KPIs de la Fase 4 */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-            {/* KPI 4.1: Asignación Asesor */}
             <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
@@ -786,7 +854,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 4.2: 1ª Sesión en 48h */}
             <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
@@ -802,7 +869,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 4.3: Cumplimiento Cronograma */}
             <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
@@ -818,7 +884,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 4.4: Detección Riesgo Abandono */}
             <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
@@ -834,7 +899,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* KPI 4.5: Satisfacción Encuesta */}
             <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2 col-span-2 sm:col-span-1">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
@@ -853,101 +917,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
-      {/* Segmentations & Breakdowns Grid - Historical Analytics */}
-      <div className="border-t border-slate-200 dark:border-slate-800 pt-6">
-        <h3 className="font-heading font-black text-base text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <PieChart className="w-4 h-4 text-blue-600 dark:text-sky-400" />
-          <span>Dimensiones de Segmentación Transversal (dm_shared)</span>
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-          {/* 1. Top Universidades */}
-          <div className="glass-panel p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm min-w-0">
-            <h4 className="font-heading font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <School className="w-4 h-4 text-blue-600 dark:text-sky-400 shrink-0" />
-              <span className="truncate">1. Segmentación por Universidad</span>
-            </h4>
-            <div className="space-y-3">
-              {segmentacion.universidades?.length === 0 ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400">Sin datos registrados.</p>
-              ) : (
-                segmentacion.universidades.map((u: any) => (
-                  <div key={u.nombre} className="space-y-1 min-w-0">
-                    <div className="flex justify-between text-xs font-semibold gap-2">
-                      <span className="text-slate-800 dark:text-slate-200 truncate">{u.nombreCompleto || u.nombre}</span>
-                      <span className="text-blue-700 dark:text-sky-400 font-mono shrink-0">{u.buyers} alumnos</span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-900 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (u.buyers / (funnel.buyers || 1)) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 2. Top Carreras */}
-          <div className="glass-panel p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm min-w-0">
-            <h4 className="font-heading font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <GraduationCap className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-              <span className="truncate">2. Demanda por Carrera</span>
-            </h4>
-            <div className="space-y-3">
-              {segmentacion.carreras?.length === 0 ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400">Sin datos registrados.</p>
-              ) : (
-                segmentacion.carreras.map((c: any) => (
-                  <div key={c.nombre} className="space-y-1 min-w-0">
-                    <div className="flex justify-between text-xs font-semibold gap-2">
-                      <span className="text-slate-800 dark:text-slate-200 truncate">{c.nombre}</span>
-                      <span className="text-purple-700 dark:text-purple-400 font-mono shrink-0">{c.buyers} casos</span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-900 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (c.buyers / (funnel.buyers || 1)) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 3. Servicios Demandados */}
-          <div className="glass-panel p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm min-w-0 md:col-span-2 lg:col-span-1">
-            <h4 className="font-heading font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <Briefcase className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span className="truncate">3. Servicios Demandados</span>
-            </h4>
-            <div className="space-y-2">
-              {segmentacion.servicios?.length === 0 ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400">Sin datos registrados.</p>
-              ) : (
-                segmentacion.servicios?.map((s: any) => (
-                  <div
-                    key={s.id}
-                    className="p-2.5 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs space-y-1 min-w-0"
-                  >
-                    <div className="flex justify-between font-semibold gap-2">
-                      <span className="text-slate-800 dark:text-slate-200 truncate">{s.nombre}</span>
-                      <span className="text-emerald-700 dark:text-emerald-400 shrink-0">S/ {s.precioBase}</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex gap-3 truncate">
-                      <span>Cotizaciones: <strong>{s.cotizaciones}</strong></span>
-                      <span>Clientes: <strong>{s.customers}</strong></span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -8,14 +8,13 @@ import {
   MessageSquare,
   BarChart3,
   Bot,
-  UserCheck,
   FileText,
   Radio,
   Menu,
   X,
-  Sparkles,
   BookOpen,
   Receipt,
+  CreditCard,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
@@ -27,7 +26,6 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    // Verificar estado de sesión WhatsApp en OpenWA
     api
       .getWhatsAppStatus()
       .then((res) => {
@@ -38,7 +36,6 @@ export default function Navbar() {
       .catch(() => setWaConnected(false));
   }, []);
 
-  // Cerrar menú móvil al navegar
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
@@ -46,9 +43,10 @@ export default function Navbar() {
   const navItems = [
     { href: '/', label: 'Inicio', icon: GraduationCap },
     { href: '/formulario', label: 'Formulario', icon: FileText },
-    { href: '/admin/buyers', label: 'Buyers', icon: Users, highlight: true },
+    { href: '/admin/buyers', label: 'Buyers', icon: Users },
     { href: '/admin/live-chat', label: 'Live Chat', icon: MessageSquare },
-    { href: '/admin/dashboard', label: 'Dashboard', icon: BarChart3 },
+    { href: '/payers', label: 'Payers (R-PAYERS)', icon: CreditCard, highlight: true },
+    { href: '/admin/dashboard', label: 'Dashboard BI', icon: BarChart3 },
     { href: '/admin/customers', label: 'Bitácora', icon: BookOpen },
     { href: '/admin/comprobantes', label: 'Comprobantes', icon: Receipt },
     { href: '/admin/agent-config', label: 'Agente IA', icon: Bot },
@@ -92,11 +90,19 @@ export default function Navbar() {
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
                       : item.highlight
-                      ? 'text-blue-700 dark:text-sky-300 hover:bg-blue-50 dark:hover:bg-slate-800/80 border border-blue-300 dark:border-sky-500/30 bg-blue-50/60 dark:bg-sky-500/10'
-                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                        ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-800/80 border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : item.highlight ? 'text-blue-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                  <Icon
+                    className={`w-3.5 h-3.5 ${
+                      isActive
+                        ? 'text-white'
+                        : item.highlight
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  />
                   {item.label}
                 </Link>
               );
@@ -105,7 +111,6 @@ export default function Navbar() {
 
           {/* Right Status Actions & Mobile Menu Toggle */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* WhatsApp OpenWA Status Pill */}
             <div
               className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
                 waConnected
@@ -119,10 +124,8 @@ export default function Navbar() {
               <span>{waConnected ? 'En línea' : 'Activo'}</span>
             </div>
 
-            {/* Theme Toggle Button (Claro / Oscuro) */}
             <ThemeToggle />
 
-            {/* Mobile Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               type="button"
@@ -142,7 +145,13 @@ export default function Navbar() {
             <span className="font-semibold text-slate-500 dark:text-slate-400">Navegación del Sistema</span>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-slate-500 dark:text-slate-400">WhatsApp:</span>
-              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${waConnected ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+              <span
+                className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  waConnected
+                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                }`}
+              >
                 {waConnected ? 'Conectado' : 'Activo'}
               </span>
             </div>
@@ -161,24 +170,19 @@ export default function Navbar() {
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm'
                       : item.highlight
-                      ? 'bg-blue-50 dark:bg-sky-500/10 text-blue-700 dark:text-sky-300 border border-blue-200 dark:border-sky-500/30'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                        ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : item.highlight ? 'text-blue-600 dark:text-sky-400' : 'text-slate-400'}`} />
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${
+                      isActive ? 'text-white' : item.highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                    }`}
+                  />
                   <span className="truncate">{item.label}</span>
                 </Link>
               );
             })}
-          </div>
-
-          <div className="pt-3 mt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <Link
-              href="/formulario"
-              className="w-full text-center py-2.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-md"
-            >
-              + Registrar Nueva Tesis
-            </Link>
           </div>
         </div>
       )}

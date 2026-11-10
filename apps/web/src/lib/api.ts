@@ -102,7 +102,7 @@ export const api = {
     }),
   getAdvisors: () => fetchApi('/advisors'),
 
-  // Pagos, Checkout y Comprobantes Oficiales
+  // Pagos, Checkout y Comprobantes Oficiales (Legacy / Pasarela Real)
   getCotizacionCheckout: (cotizacionId: string) => fetchApi(`/payments/cotizacion/${cotizacionId}`),
   procesarCheckout: (data: any) =>
     fetchApi('/payments/checkout/procesar', {
@@ -121,6 +121,30 @@ export const api = {
     }),
   sincronizarPagosCulqi: () =>
     fetchApi('/payments/sincronizar-culqi', {
+      method: 'POST',
+    }),
+
+  // Fase 3: PAYERS — Agente de Cobranza Automatizada v2 & Reporte BI R-PAYERS (INBESTIGA_TESIS + INBESTIGA_MART)
+  getPayersOverview: () => fetchApi('/payers/overview'),
+  getPayerOrden: (id: number | string) => fetchApi(`/payers/ordenes/${id}`),
+  enviarMensajePayerAgent: (ordenPagoId: number, mensaje: string) =>
+    fetchApi('/payers/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({ ordenPagoId, mensaje }),
+    }),
+  simularWebhookPayers: (ordenPagoId: number, medioPago?: 'Yape' | 'Plin' | 'Tarjeta') =>
+    fetchApi('/payers/webhook/simular', {
+      method: 'POST',
+      body: JSON.stringify({ ordenPagoId, medioPago }),
+    }),
+  verificarVoucherPayers: (voucherId: number, accion: 'APROBAR' | 'RECHAZAR', motivo?: string) =>
+    fetchApi(`/payers/vouchers/${voucherId}/verificar`, {
+      method: 'POST',
+      body: JSON.stringify({ accion, motivo }),
+    }),
+  getPayersEvaluacion: () => fetchApi('/payers/evaluacion'),
+  ejecutarPayersEvaluacion: () =>
+    fetchApi('/payers/evaluacion/ejecutar', {
       method: 'POST',
     }),
 
