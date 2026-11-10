@@ -1280,6 +1280,47 @@ export class PayersService {
         `Tu orden **${orden.codigo_orden}** está respaldada por el contrato **${orden.codigo_contrato}** y tu cuota exigible actual es de **S/ ${montoCuotaActual.toFixed(2)}**. ¿Deseas proceder con el enlace de pago o prefieres fraccionarlo en cuotas?`;
     }
     // =========================================================================
+    // REGLA 12: Consulta de Siguiente Paso / "¿Qué hago?" / "¿Qué falta?"
+    // =========================================================================
+    else if (
+      /qu[eé] (hago|falta|sigue|paso|debo hacer)|c[oó]mo contin[uú]o|cu[aá]l es el siguiente paso|ahora qu[eé]/i.test(
+        msgLower,
+      )
+    ) {
+      const pagosConfirmados = pagos.filter((p) => p.estado === 'CONFIRMADO');
+      const toolOrden = await this.logToolExecution(
+        conversacionId,
+        ordenPagoId,
+        'consultar_orden_pago',
+        { orden_pago_id: ordenPagoId },
+        { estado_orden: orden.estado, pagos_confirmados: pagosConfirmados.length },
+        65,
+      );
+      herramientasEjecutadas.push(toolOrden);
+
+      if (pagosConfirmados.length > 0 || cuotaPendiente.estado === 'PAGADA') {
+        guardrailsActivados.push('RN-04: Orden con cuota inicial confirmada — Orientación a Fase 4: CUSTOMERS');
+        respuesta =
+          `🎓 **¡Tu cuota inicial ya está confirmada!**\n\n` +
+          `• **Estado de tu servicio:** \`ACTIVO\`\n` +
+          `• **Monto cobrado:** S/ ${Number(orden.monto_cobrado).toFixed(2)} de S/ ${Number(orden.monto_comprometido).toFixed(2)}\n\n` +
+          `📌 **Siguiente paso:** Tu expediente ya pasó al área académica (**Fase 4: CUSTOMERS**). ` +
+          `El especialista metodológico asignado a tu carrera se comunicará contigo dentro de las **24 horas hábiles** pactadas en el contrato para coordinar la primera sesión de inducción y entregable del cronograma.\n\n` +
+          `¡Ya no tienes que realizar ningún pago adicional en este momento!`;
+      } else {
+        guardrailsActivados.push('Orientación de Cobranza: Instrucciones para activación de servicio');
+        const urlEnlace =
+          enlaceActivo?.url_enlace || `https://checkout.culqi.com/pay/lnk_${orden.codigo_orden.toLowerCase()}`;
+        respuesta =
+          `📋 **Para activar tu servicio y asignarte asesor metodológico:**\n\n` +
+          `Solo falta completar el abono de tu cuota inicial (**S/ ${montoCuotaActual.toFixed(2)}**).\n\n` +
+          `Puedes completarlo por cualquiera de estas opciones:\n` +
+          `1. 💳 **Enlace en línea (Tarjeta/Yape):** ${urlEnlace}\n` +
+          `2. 🏦 **Transferencia bancaria BCP / Interbank:** Cta. Cte. Soles BCP **570-2489103-0-12** (CCI: 00257000248910301235, INBESTIGA SAC) y me adjuntas la captura del voucher por aquí.\n\n` +
+          `¿Deseas que te habilite el enlace de pago o prefieres pagar por transferencia?`;
+      }
+    }
+    // =========================================================================
     // FLUJO POR DEFECTO: Consulta de Orden + Emisión de Enlace
     // =========================================================================
     else {
