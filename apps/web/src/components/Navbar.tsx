@@ -63,11 +63,19 @@ export default function Navbar() {
     { href: '/', label: 'Inicio', icon: GraduationCap },
     { href: '/formulario', label: 'Formulario', icon: FileText },
     {
-      label: 'LEADS',
+      label: 'BUYERS',
       icon: Users,
       children: [
-        { href: '/admin/buyers', label: 'Buyers', icon: Users },
-        { href: '/admin/live-chat', label: 'Live Chat', icon: MessageSquare },
+        { href: '/admin/buyers', label: 'Gestión Buyers', icon: Users },
+        { href: '/admin/live-chat', label: 'Live Chat (Buyers)', icon: MessageSquare },
+      ],
+    },
+    {
+      label: 'LEADS',
+      icon: Bot,
+      children: [
+        { href: '/admin/leads', label: 'Propuestas & Cierre', icon: Bot },
+        { href: '/admin/leads/live-chat', label: 'Live Chat (LEADS)', icon: MessageSquare },
       ],
     },
     {
