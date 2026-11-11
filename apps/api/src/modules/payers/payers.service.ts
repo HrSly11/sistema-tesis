@@ -1238,8 +1238,9 @@ export class PayersService {
         // Reemplazar cuotas pendientes manteniendo integridad referencial
         await this.prisma.$executeRawUnsafe(`
           UPDATE INBESTIGA_TESIS.dbo.ENLACE_PAGO SET cuota_id = NULL WHERE orden_pago_id = ${ordenPagoId};
-        `);
-        await this.prisma.$executeRawUnsafe(`
+          UPDATE INBESTIGA_TESIS.dbo.VOUCHER SET cuota_id = NULL WHERE orden_pago_id = ${ordenPagoId};
+          UPDATE INBESTIGA_TESIS.dbo.ALERTA_COBRANZA SET cuota_id = NULL WHERE orden_pago_id = ${ordenPagoId};
+          UPDATE INBESTIGA_TESIS.dbo.PAGO SET cuota_id = NULL WHERE orden_pago_id = ${ordenPagoId} AND estado != 'CONFIRMADO';
           DELETE FROM INBESTIGA_TESIS.dbo.CUOTA_PAGO WHERE orden_pago_id = ${ordenPagoId} AND estado != 'PAGADA';
         `);
 
