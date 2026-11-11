@@ -87,4 +87,13 @@ export class PayersController {
   async ejecutarEvaluacion() {
     return this.payersService.ejecutarEvaluacionAgente();
   }
+
+  @Post('reset-con-cuotas')
+  @ApiOperation({
+    summary:
+      'Configura o resetea una orden con el acuerdo de cuotas proveniente de LEADS (3 cuotas: 30%/40%/30%) para pruebas integrales de cobranza',
+  })
+  async resetConCuotas(@Body() body: { codigoOrden?: string }) {
+    return this.payersService.resetConCuotasLeads(body.codigoOrden || 'ORD-2026-0001');
+  }
 }

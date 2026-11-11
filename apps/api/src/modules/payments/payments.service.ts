@@ -479,7 +479,9 @@ export class PaymentsService {
 
         await this.prisma.$executeRawUnsafe(`
           UPDATE INBESTIGA_TESIS.dbo.ORDEN_PAGO
-          SET estado = '${nuevoEstadoOrden}', en_mora = 0, servicio_suspendido_mora = 0
+          SET estado = '${nuevoEstadoOrden}',
+              en_mora = 0,
+              servicio_suspendido_mora = 0
           WHERE orden_pago_id = ${ordenPagoId};
         `);
 

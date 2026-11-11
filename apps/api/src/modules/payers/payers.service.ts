@@ -2123,4 +2123,131 @@ export class PayersService {
       timestamp: new Date().toISOString(),
     };
   }
+
+  /**
+   * 8. POST /api/v1/payers/reset-con-cuotas
+   * Resetea una orden con el acuerdo de cuotas pactado en LEADS (3 cuotas: 30% / 40% / 30%)
+   */
+  async resetConCuotasLeads(codigoOrden = 'ORD-2026-0001') {
+    const cleanCodigo = codigoOrden.replace(/'/g, "''");
+    const ordRows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT o.orden_pago_id, o.propuesta_id, b.contacto_id, o.monto_comprometido, c.nombres, c.apellidos
+      FROM INBESTIGA_TESIS.dbo.ORDEN_PAGO o
+      INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = o.propuesta_id
+      INNER JOIN INBESTIGA_TESIS.dbo.LEAD l ON l.lead_id = pr.lead_id
+      INNER JOIN INBESTIGA_TESIS.dbo.BUYER b ON b.buyer_id = l.buyer_id
+      INNER JOIN INBESTIGA_TESIS.dbo.CONTACTO c ON c.contacto_id = b.contacto_id
+      WHERE o.codigo_orden = '${cleanCodigo}';
+    `);
+    if (!ordRows.length) {
+      throw new NotFoundException(`Orden ${codigoOrden} no encontrada`);
+    }
+    const ord = ordRows[0];
+    const ordenPagoId = Number(ord.orden_pago_id);
+    const contactoId = Number(ord.contacto_id);
+    const total = Number(ord.monto_comprometido) || 1620.0;
+
+    // 3 cuotas: 30% / 40% / 30%
+    const c1Monto = Number((total * 0.3).toFixed(2));
+    const c2Monto = Number((total * 0.4).toFixed(2));
+    const c3Monto = Number((total - c1Monto - c2Monto).toFixed(2));
+
+    // 1. Limpiar pagos y cuotas previas
+    await this.prisma.$executeRawUnsafe(`
+      DELETE FROM INBESTIGA_TESIS.dbo.EVENTO_WEBHOOK WHERE pago_id IN (SELECT pago_id FROM INBESTIGA_TESIS.dbo.PAGO WHERE orden_pago_id = ${ordenPagoId});
+      DELETE FROM INBESTIGA_TESIS.dbo.VOUCHER WHERE orden_pago_id = ${ordenPagoId};
+      DELETE FROM INBESTIGA_TESIS.dbo.PAGO WHERE orden_pago_id = ${ordenPagoId};
+      DELETE FROM INBESTIGA_TESIS.dbo.ENLACE_PAGO WHERE orden_pago_id = ${ordenPagoId};
+      DELETE FROM INBESTIGA_TESIS.dbo.ALERTA_COBRANZA WHERE orden_pago_id = ${ordenPagoId};
+      DELETE FROM INBESTIGA_TESIS.dbo.CUOTA_PAGO WHERE orden_pago_id = ${ordenPagoId};
+    `);
+
+    // 2. Insertar las 3 cuotas acordadas desde LEADS
+    await this.prisma.$executeRawUnsafe(`
+      INSERT INTO INBESTIGA_TESIS.dbo.CUOTA_PAGO (
+        orden_pago_id, numero_cuota, porcentaje, monto_programado, condicion, fecha_vencimiento, version_plan, estado
+      ) VALUES
+      (${ordenPagoId}, 1, 30.00, ${c1Monto}, 'Cuota inicial (Activa asesor y primera sesión)', DATEADD(DAY, 3, CAST(GETDATE() AS DATE)), 1, 'ENLACE_ENVIADO'),
+      (${ordenPagoId}, 2, 40.00, ${c2Monto}, 'Aprobación Plan de Tesis / Capítulo 1', DATEADD(DAY, 30, CAST(GETDATE() AS DATE)), 1, 'ESPERA_HITO'),
+      (${ordenPagoId}, 3, 30.00, ${c3Monto}, 'Informe Final y Aprobación de Sustentación', DATEADD(DAY, 60, CAST(GETDATE() AS DATE)), 1, 'ESPERA_HITO');
+    `);
+
+    const primeraCuota: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1 cuota_id FROM INBESTIGA_TESIS.dbo.CUOTA_PAGO WHERE orden_pago_id = ${ordenPagoId} ORDER BY numero_cuota ASC;
+    `);
+    const cuota1Id = Number(primeraCuota[0]?.cuota_id || 1);
+
+    // 3. Actualizar ORDEN_PAGO
+    await this.prisma.$executeRawUnsafe(`
+      UPDATE INBESTIGA_TESIS.dbo.ORDEN_PAGO
+      SET estado = 'ENLACE_ENVIADO',
+          modalidad_pago_id = 2,
+          en_mora = 0,
+          servicio_suspendido_mora = 0
+      WHERE orden_pago_id = ${ordenPagoId};
+    `);
+
+    // 4. Actualizar HANDOFF_LEADS para reflejar el acuerdo de cuotas en LEADS
+    await this.prisma.$executeRawUnsafe(`
+      UPDATE INBESTIGA_TESIS.dbo.HANDOFF_LEADS
+      SET modalidad_acordada = '3 CUOTAS (30/40/30)',
+          resumen_conversacion_leads = 'El estudiante pactó en LEADS abonar en 3 cuotas por hitos verificables: Cuota 1 inicial (S/ ${c1Monto.toFixed(2)}) para activar asesor, Cuota 2 (S/ ${c2Monto.toFixed(2)}) al entregar Cap 1, Cuota 3 (S/ ${c3Monto.toFixed(2)}) al informe final.',
+          primer_enlace_url = 'http://localhost:3000/checkout/${codigoOrden}',
+          estado_traspaso = 'VALIDADO'
+      WHERE orden_pago_id = ${ordenPagoId};
+    `);
+
+    // 5. Emitir nuevo ENLACE_PAGO activo para la Cuota 1
+    const refLink = `lnk_leads_${ordenPagoId}_${Date.now().toString().slice(-5)}`;
+    const urlLink = `http://localhost:3000/checkout/${codigoOrden}`;
+    await this.prisma.$executeRawUnsafe(`
+      INSERT INTO INBESTIGA_TESIS.dbo.ENLACE_PAGO (
+        orden_pago_id, cuota_id, medio_pago_id, referencia_externa, url_enlace, monto, fecha_envio, fecha_expiracion, estado
+      ) VALUES (
+        ${ordenPagoId}, ${cuota1Id}, 1, '${refLink}', '${urlLink}', ${c1Monto}, GETDATE(), DATEADD(HOUR, 72, GETDATE()), 'ENVIADO'
+      );
+    `);
+
+    // 6. Limpiar mensajes de chat previos en PAYERS para partir de cero
+    await this.prisma.$executeRawUnsafe(`
+      DELETE m
+      FROM INBESTIGA_TESIS.dbo.MENSAJE m
+      INNER JOIN INBESTIGA_TESIS.dbo.CONVERSACION c ON c.conversacion_id = m.conversacion_id
+      WHERE c.contacto_id = ${contactoId} AND c.fase = 'PAYERS';
+
+      UPDATE INBESTIGA_TESIS.dbo.CONVERSACION
+      SET estado = 'ACTIVA', resuelta_sin_humano = 1
+      WHERE contacto_id = ${contactoId} AND fase = 'PAYERS';
+    `);
+
+    await this.logAuditoria(
+      'ADMIN',
+      'Configurador de Pruebas PAYERS',
+      'RESET_ORDEN_LEADS_CUOTAS',
+      'ORDEN_PAGO',
+      String(ordenPagoId),
+      `Orden ${codigoOrden} reseteada a estado PENDIENTE con 3 cuotas pactadas en LEADS (30/40/30). Cuota 1 exigible: S/ ${c1Monto.toFixed(2)}.`,
+    );
+
+    return {
+      success: true,
+      mensaje: `Orden ${codigoOrden} configurada exitosamente desde HANDOFF LEADS con 3 cuotas.`,
+      orden: {
+        codigo: codigoOrden,
+        estudiante: `${ord.nombres} ${ord.apellidos}`,
+        modalidad: '3 cuotas (30% / 40% / 30%)',
+        totalComprometido: total,
+        totalCobrado: 0.0,
+        cuota1_exigible: {
+          numero: 1,
+          monto: c1Monto,
+          estado: 'ENLACE_ENVIADO',
+          condicion: 'Cuota inicial (Activa asesor y primera sesión)',
+          url_checkout: urlLink,
+        },
+        cuota2: { numero: 2, monto: c2Monto, estado: 'ESPERA_HITO' },
+        cuota3: { numero: 3, monto: c3Monto, estado: 'ESPERA_HITO' },
+      },
+    };
+  }
 }
