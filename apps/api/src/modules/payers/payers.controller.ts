@@ -96,4 +96,18 @@ export class PayersController {
   async resetConCuotas(@Body() body: { codigoOrden?: string }) {
     return this.payersService.resetConCuotasLeads(body.codigoOrden || 'ORD-2026-0001');
   }
+
+  @Post('alertas/simular-etapa')
+  @ApiOperation({
+    summary:
+      'Disparador manual a demanda para la presentación: simula en vivo la alerta de 4h, 12h o 24h con mensaje a Telegram y registro en BD',
+  })
+  async simularAlertaEtapa(
+    @Body() body: { ordenPagoId?: number; etapa: '4h' | '12h' | '24h' },
+  ) {
+    return this.payersService.simularAlertaEtapa(
+      Number(body.ordenPagoId || 1),
+      body.etapa || '4h',
+    );
+  }
 }

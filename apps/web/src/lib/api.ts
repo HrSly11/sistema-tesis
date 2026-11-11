@@ -147,6 +147,16 @@ export const api = {
     fetchApi('/payers/evaluacion/ejecutar', {
       method: 'POST',
     }),
+  simularAlertaEtapaPayers: (ordenPagoId: number, etapa: '4h' | '12h' | '24h') =>
+    fetchApi('/payers/alertas/simular-etapa', {
+      method: 'POST',
+      body: JSON.stringify({ ordenPagoId, etapa }),
+    }),
+  resetConCuotasPayers: (codigoOrden = 'ORD-2026-0001') =>
+    fetchApi('/payers/reset-con-cuotas', {
+      method: 'POST',
+      body: JSON.stringify({ codigoOrden }),
+    }),
 
   // WhatsApp Status
   getWhatsAppStatus: () => fetchApi('/whatsapp/status'),

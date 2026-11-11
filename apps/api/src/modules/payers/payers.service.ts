@@ -2250,4 +2250,148 @@ export class PayersService {
       },
     };
   }
+
+  /**
+   * Helper privado para enviar mensajes push a Telegram
+   */
+  private async enviarTelegramPush(chatId: string | number, texto: string) {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!chatId || !botToken || !botToken.includes(':')) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const axios = require('axios');
+      await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        chat_id: chatId,
+        text: texto,
+        parse_mode: 'Markdown',
+      });
+    } catch {
+      try {
+        const axios = require('axios');
+        await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          chat_id: chatId,
+          text: texto,
+        });
+      } catch (err: any) {
+        this.logger.warn(`No se pudo enviar mensaje push a Telegram: ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * 9. POST /api/v1/payers/alertas/simular-etapa
+   * Disparador manual a demanda para la presentación: simula en vivo la alerta de 4h, 12h o 24h
+   */
+  async simularAlertaEtapa(ordenPagoId = 1, etapa: '4h' | '12h' | '24h' = '4h') {
+    const ordRows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1
+        o.orden_pago_id,
+        o.codigo_orden,
+        o.monto_comprometido,
+        o.estado,
+        c.contacto_id,
+        c.nombres,
+        c.apellidos,
+        c.telegram_chat_id
+      FROM INBESTIGA_TESIS.dbo.ORDEN_PAGO o
+      INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = o.propuesta_id
+      INNER JOIN INBESTIGA_TESIS.dbo.LEAD l ON l.lead_id = pr.lead_id
+      INNER JOIN INBESTIGA_TESIS.dbo.BUYER b ON b.buyer_id = l.buyer_id
+      INNER JOIN INBESTIGA_TESIS.dbo.CONTACTO c ON c.contacto_id = b.contacto_id
+      WHERE o.orden_pago_id = ${ordenPagoId};
+    `);
+
+    if (!ordRows.length) {
+      throw new NotFoundException(`No se encontró la orden #${ordenPagoId}`);
+    }
+    const ord = ordRows[0];
+    const totalComprometido = Number(ord.monto_comprometido) || 1620.0;
+    const urlEnlace = `http://localhost:3000/checkout/${ord.codigo_orden}`;
+
+    // Obtener cuota activa
+    const cuotasRows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1 * FROM INBESTIGA_TESIS.dbo.CUOTA_PAGO
+      WHERE orden_pago_id = ${ordenPagoId} AND estado NOT IN ('PAGADA', 'ANULADA')
+      ORDER BY numero_cuota ASC;
+    `);
+    const cuotaActiva = cuotasRows[0] || { cuota_id: 1, numero_cuota: 1, monto_programado: 486.0 };
+    const cuotaId = Number(cuotaActiva.cuota_id);
+    const montoCuota = Number(cuotaActiva.monto_programado);
+
+    let textoTelegram = '';
+    let secuencia = 'Recordatorio 4 h';
+    let esEscalado = 0;
+
+    if (etapa === '4h') {
+      secuencia = 'Recordatorio 4 h';
+      textoTelegram =
+        `⏰ *Recordatorio de Activación (4 Horas) — INBESTIGA.TESIS*\n\n` +
+        `Hola * ${ord.nombres}*, han transcurrido *4 horas* desde la emisión de tu propuesta y enlace oficial de pago.\n\n` +
+        `Te reenviamos tu acceso directo seguro de Culqi para completar la Cuota inicial (S/ ${montoCuota.toFixed(2)}):\n` +
+        `👉 ${urlEnlace}\n\n` +
+        `¿Tuviste alguna dificultad con tu banco o pasarela para poder ayudarte?`;
+    } else if (etapa === '12h') {
+      secuencia = 'Recordatorio 12 h';
+      const cuota6 = (totalComprometido * 0.20).toFixed(2);
+      textoTelegram =
+        `📅 *Facilidad de Pago y Cuotas (12 Horas) — INBESTIGA.TESIS*\n\n` +
+        `Hola * ${ord.nombres}*, han transcurrido *12 horas* y vemos que tu orden \`${ord.codigo_orden}\` aún no se ha activado.\n\n` +
+        `Sabemos que la inversión de tesis es importante: ¿deseas que *reestructuremos tu plan a 6 cuotas por entregable* para que tu cuota inicial baje a solo *S/ ${cuota6}*?\n\n` +
+        `Solo responde este mensaje indicándome *"Quiero 6 cuotas"* o *"En cuotas"* y lo actualizo de inmediato.`;
+    } else {
+      secuencia = 'Escalado al administrador';
+      esEscalado = 1;
+      textoTelegram =
+        `👨‍💼 *Atención Personalizada (24 Horas) — INBESTIGA.TESIS*\n\n` +
+        `Estimada * ${ord.nombres}*, han transcurrido más de *24 horas* sin concretar la activación de tu asesoría.\n\n` +
+        `Para no enviarte mensajes automáticos invasivos, he pausado los recordatorios de este canal y he derivado tu expediente con prioridad a un *Asesor de Coordinación Académica y Caja*, quien se comunicará contigo directamente por llamada o WhatsApp para asistirte personalmente.\n\n` +
+        `¡Muchos éxitos en tu investigación!`;
+
+      // Insertar escalamiento
+      await this.prisma.$executeRawUnsafe(`
+        INSERT INTO INBESTIGA_TESIS.dbo.ESCALAMIENTO (
+          conversacion_id, orden_pago_id, tipo_escalamiento, destino, motivo, resumen_automatico, estado, fecha
+        ) VALUES (
+          1, ${ordenPagoId}, 'ESCALAMIENTO_HUMANO', 'Coordinación Comercial/Caja', 'Inactividad > 24h sin concretar abono de cuota',
+          'El alumno no completó el pago tras recordatorios de 4h y 12h. Requiere llamada humana personalizada.',
+          'ABIERTO', GETDATE()
+        );
+      `);
+    }
+
+    // 1. Insertar en ALERTA_COBRANZA
+    await this.prisma.$executeRawUnsafe(`
+      INSERT INTO INBESTIGA_TESIS.dbo.ALERTA_COBRANZA (
+        orden_pago_id, cuota_id, fecha_envio, secuencia, tipo, resultado, escalado
+      ) VALUES (
+        ${ordenPagoId}, ${cuotaId}, GETDATE(), '${secuencia}', 'Orden sin pago', 'ENVIADO', ${esEscalado}
+      );
+    `);
+
+    // 2. Registrar en Auditoría
+    await this.logAuditoria(
+      'ADMIN',
+      'Panel Cockpit Demo Emplazamiento',
+      'DISPARAR_ALERTA_ETAPA',
+      'ALERTA_COBRANZA',
+      String(ordenPagoId),
+      `Disparo forzado de alerta ${etapa.toUpperCase()} (${secuencia}) para orden ${ord.codigo_orden} - Estudiante: ${ord.nombres} ${ord.apellidos}`,
+    );
+
+    // 3. Enviar mensaje en vivo a Telegram
+    if (ord.telegram_chat_id) {
+      await this.enviarTelegramPush(ord.telegram_chat_id, textoTelegram);
+    }
+
+    return {
+      success: true,
+      etapa,
+      secuencia,
+      orden: ord.codigo_orden,
+      estudiante: `${ord.nombres} ${ord.apellidos}`,
+      telegramChatId: ord.telegram_chat_id,
+      mensajeEnviado: textoTelegram,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }

@@ -101,6 +101,20 @@ export default function PayersModulePage() {
   const [lastGuardrails, setLastGuardrails] = useState<string[]>([]);
   const [lastTools, setLastTools] = useState<any[]>([]);
   const [simulatingWebhook, setSimulatingWebhook] = useState<boolean>(false);
+  const [simulandoAlerta, setSimulandoAlerta] = useState<boolean>(false);
+
+  const handleSimularAlerta = async (etapa: '4h' | '12h' | '24h') => {
+    setSimulandoAlerta(true);
+    try {
+      const res = await api.simularAlertaEtapaPayers(selectedOrdenId, etapa);
+      setStatusBanner(`⚡ ¡Alerta de ${etapa.toUpperCase()} disparada exitosamente al Telegram de ${res.estudiante}! (${res.secuencia})`);
+      await cargarOrdenDetalle(selectedOrdenId);
+    } catch (err: any) {
+      alert(`Error al disparar alerta: ${err.message}`);
+    } finally {
+      setSimulandoAlerta(false);
+    }
+  };
 
   // Estado Tab 3: Bandeja de 104 Órdenes y Vouchers
   const [searchOrden, setSearchOrden] = useState<string>('');
@@ -851,6 +865,58 @@ export default function PayersModulePage() {
                   <CreditCard className="w-3.5 h-3.5 text-emerald-200" />
                   <span>Simular Webhook Tarjeta</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Cockpit del Expositor: Disparador Manual de Emplazamiento (Sección 5.4) */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-300 dark:border-amber-700">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-950 dark:text-amber-200 flex items-center gap-2">
+                      <span>Cockpit del Expositor: Emplazamiento de Cobranza (Sección 5.4)</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200 font-mono">EN VIVO</span>
+                    </h4>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      Dispara a demanda el recordatorio exacto según avance tu presentación sin esperar las horas reales:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleSimularAlerta('4h')}
+                    disabled={simulandoAlerta}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
+                    title="Simula 4 horas sin pago: reenvía enlace de Culqi"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>1. Disparar 4h (Reenvío Enlace)</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleSimularAlerta('12h')}
+                    disabled={simulandoAlerta}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
+                    title="Simula 12 horas sin pago: ofrece dividir en 6 cuotas"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>2. Disparar 12h (Ofrecer Cuotas)</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleSimularAlerta('24h')}
+                    disabled={simulandoAlerta}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
+                    title="Simula 24 horas sin respuesta: escalamiento humano y silencio del bot"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>3. Disparar 24h (Escalamiento Humano)</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
