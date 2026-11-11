@@ -840,6 +840,45 @@ export class PayersService {
       }
     }
     // =========================================================================
+    // REGLA 4.5: Solicitud Expresa o Reenvío de Enlace de Pago (emitir_enlace_pago)
+    // =========================================================================
+    else if (
+      /enlace|link|dame.*enlace|p[aá]same.*enlace|reenvi.*enlace|d[oó]nde pago|c[oó]mo pago|pasar.*link|enlace.*pagar/i.test(
+        msgLower,
+      ) &&
+      !/3 cuotas|6 cuotas|fraccionar|cambiar/i.test(msgLower)
+    ) {
+      guardrailsActivados.push('Solicitud expresa de emisión o reenvío de enlace de pago oficial');
+      const urlEnlace =
+        enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`;
+
+      const toolLink = await this.logToolExecution(
+        conversacionId,
+        ordenPagoId,
+        'emitir_enlace_pago',
+        {
+          orden_pago_id: ordenPagoId,
+          cuota_id: cuotaPendiente.cuota_id,
+          monto: montoCuotaActual,
+        },
+        {
+          url_enlace: urlEnlace,
+          estado_cuota: cuotaPendiente.estado,
+        },
+        80,
+      );
+      herramientasEjecutadas.push(toolLink);
+
+      respuesta =
+        `🔗 **Enlace Oficial de Pago — Orden ${orden.codigo_orden}:**\n\n` +
+        `Estimada **${orden.estudiante_nombre}**, aquí tienes tu enlace directo para abonar de forma segura:\n\n` +
+        `💳 **Pagar en Pasarela Culqi:** ${urlEnlace}\n\n` +
+        `• **Servicio:** ${orden.servicio_nombre}\n` +
+        `• **Cuota #${cuotaPendiente.numero_cuota}:** S/ ${montoCuotaActual.toFixed(2)} (\`${cuotaPendiente.estado}\`)\n` +
+        `• **Medios aceptados:** Yape Directo (hasta S/ 500.00), Tarjeta de Débito/Crédito y Transferencia BCP.\n\n` +
+        `Una vez acreditado tu abono, tu servicio se activará en tiempo real y daremos aviso al Dr. Roberto Carlos Mendoza para iniciar tus asesorías.`;
+    }
+    // =========================================================================
     // REGLA 5: Envío de Voucher / Transferencia Manual (RN-06)
     // =========================================================================
     else if (
@@ -1546,6 +1585,9 @@ export class PayersService {
       // 1. Invocar Google Gemini con el contexto en vivo de la base de datos
       let respuestaGemini: string | null = null;
       const apiKey = process.env.GEMINI_API_KEY;
+      const urlEnlace =
+        enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`;
+
       if (apiKey && apiKey.length > 10) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1561,11 +1603,13 @@ export class PayersService {
             `- Total pagado a la fecha: S/ ${totalCobrado.toFixed(2)}\n` +
             `- Saldo pendiente real: S/ ${saldoPendiente.toFixed(2)}\n` +
             `- Cuota actual (#${cuotaPendiente.numero_cuota}): S/ ${montoCuotaActual.toFixed(2)} (${cuotaPendiente.estado})\n` +
-            `- Asesor Metodológico: Dr. Roberto Carlos Mendoza\n\n` +
+            `- Asesor Metodológico: Dr. Roberto Carlos Mendoza\n` +
+            `- Enlace Oficial de Pago Culqi: ${urlEnlace}\n\n` +
             `REGLAS ESTRICTAS DE RESPUESTA:\n` +
-            `1. Si saldo pendiente es mayor a 0 (S/ ${saldoPendiente.toFixed(2)}), INDICA QUE TIENE UN SALDO PENDIENTE de S/ ${saldoPendiente.toFixed(2)}. Si saldo es 0, confirma que no debe nada.\n` +
-            `2. Responde en tono profesional, cálido, directo y conciso (máximo 2 párrafos).\n` +
-            `3. Pregunta exacta del estudiante: "${mensaje}"`;
+            `1. Si el saldo pendiente es mayor a 0 (S/ ${saldoPendiente.toFixed(2)}), INDICA QUE TIENE UN SALDO PENDIENTE de S/ ${saldoPendiente.toFixed(2)}. Si el saldo es 0, confirma que no debe nada.\n` +
+            `2. Si el estudiante pide el enlace o cómo pagar, PROPORCIONA SIEMPRE este enlace exacto: ${urlEnlace}. PROHIBIDO usar textos como 'ENLACE DE PAGO AQUÍ' o placeholders ficticios.\n` +
+            `3. Responde en tono profesional, cálido, directo y conciso (máximo 2 párrafos).\n` +
+            `4. Pregunta exacta del estudiante: "${mensaje}"`;
 
           const gRes = await axios.post(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
@@ -1575,7 +1619,10 @@ export class PayersService {
             { timeout: 12000 },
           );
           if (gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-            respuestaGemini = gRes.data.candidates[0].content.parts[0].text.trim();
+            let textoG = gRes.data.candidates[0].content.parts[0].text.trim();
+            // Reemplazo de seguridad contra placeholders de LLM
+            textoG = textoG.replace(/ENLACE(_|\s*)DE(_|\s*)PAGO(\s*AQU[IÍ])?/gi, urlEnlace);
+            respuestaGemini = textoG;
           }
         } catch (e: any) {
           this.logger.warn(`Gemini fallback: ${e.message}`);
