@@ -751,7 +751,7 @@ export class PayersService {
         herramientasEjecutadas.push(toolPol);
 
         const refLink = `lnk_card_${ordenPagoId}_${Date.now().toString().slice(-5)}`;
-        const urlLink = `https://checkout.culqi.com/pay/${refLink}`;
+        const urlLink = `http://localhost:3000/checkout/${orden.codigo_orden}`;
         await this.prisma.$executeRawUnsafe(`
           INSERT INTO INBESTIGA_TESIS.dbo.ENLACE_PAGO (
             orden_pago_id, cuota_id, medio_pago_id, referencia_externa, url_enlace, monto, fecha_envio, fecha_expiracion, estado
@@ -802,7 +802,7 @@ export class PayersService {
         );
         const medioId = billetera === 'Plin' ? 2 : 1;
         const refLink = `lnk_${billetera.toLowerCase()}_${ordenPagoId}_${Date.now().toString().slice(-5)}`;
-        const urlLink = `https://checkout.culqi.com/pay/${refLink}`;
+        const urlLink = `http://localhost:3000/checkout/${orden.codigo_orden}`;
 
         await this.prisma.$executeRawUnsafe(`
           INSERT INTO INBESTIGA_TESIS.dbo.ENLACE_PAGO (
@@ -1012,7 +1012,7 @@ export class PayersService {
 
         const medioDefault = montoCuotaActual <= 500 ? 1 : 3;
         const refLink = `lnk_ctr_${ordenPagoId}_${Date.now().toString().slice(-5)}`;
-        const urlLink = `https://checkout.culqi.com/pay/${refLink}`;
+        const urlLink = `http://localhost:3000/checkout/${orden.codigo_orden}`;
 
         await this.prisma.$executeRawUnsafe(`
           INSERT INTO INBESTIGA_TESIS.dbo.ENLACE_PAGO (
@@ -1258,7 +1258,7 @@ export class PayersService {
 
         const medioId = montoInicial <= 500 ? 1 : 3;
         const refLink = `lnk_mod_${ordenPagoId}_${Date.now().toString().slice(-5)}`;
-        const urlLink = `https://checkout.culqi.com/pay/${refLink}`;
+        const urlLink = `http://localhost:3000/checkout/${orden.codigo_orden}`;
 
         await this.prisma.$executeRawUnsafe(`
           INSERT INTO INBESTIGA_TESIS.dbo.ENLACE_PAGO (
@@ -1319,7 +1319,7 @@ export class PayersService {
       respuesta =
         `👤 **Responsable de Pago Actualizado:**\n` +
         `He registrado a **${tipoResp}** como responsable de pago de tu orden **${orden.codigo_orden}**.\n\n` +
-        `Puedes reenviarle directamente el enlace de pago por **S/ ${montoCuotaActual.toFixed(2)}** (${enlaceActivo?.url_enlace || `https://checkout.culqi.com/pay/ord_${ordenPagoId}`}) o los datos de cuenta corriente corporativa BCP **570-2489103-0-12** (INBESTIGA SAC).`;
+        `Puedes reenviarle directamente el enlace de pago por **S/ ${montoCuotaActual.toFixed(2)}** (${enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`}) o los datos de cuenta corriente corporativa BCP **570-2489103-0-12** (INBESTIGA SAC).`;
     }
     // =========================================================================
     // REGLA 10: Pausa de Cobranza / No Contactar (RN-07 / RN-08)
@@ -1449,7 +1449,7 @@ export class PayersService {
       } else {
         guardrailsActivados.push('Orientación de Cobranza: Instrucciones para activación de servicio');
         const urlEnlace =
-          enlaceActivo?.url_enlace || `https://checkout.culqi.com/pay/lnk_${orden.codigo_orden.toLowerCase()}`;
+          enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`;
         respuesta =
           `📋 **Para activar tu servicio y asignarte asesor metodológico:**\n\n` +
           `Solo falta completar el abono de tu cuota inicial (**S/ ${montoCuotaActual.toFixed(2)}**).\n\n` +
@@ -1484,7 +1484,7 @@ export class PayersService {
       herramientasEjecutadas.push(toolOrden);
 
       const urlEnlace =
-        enlaceActivo?.url_enlace || `https://checkout.culqi.com/pay/lnk_${orden.codigo_orden.toLowerCase()}`;
+        enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`;
 
       const toolLink = await this.logToolExecution(
         conversacionId,
