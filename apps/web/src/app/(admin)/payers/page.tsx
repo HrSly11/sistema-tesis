@@ -102,6 +102,23 @@ export default function PayersModulePage() {
   const [lastTools, setLastTools] = useState<any[]>([]);
   const [simulatingWebhook, setSimulatingWebhook] = useState<boolean>(false);
   const [simulandoAlerta, setSimulandoAlerta] = useState<boolean>(false);
+  const [canalVisual, setCanalVisual] = useState<'WHATSAPP' | 'TELEGRAM'>('WHATSAPP');
+  const [resettingConCuotas, setResettingConCuotas] = useState<boolean>(false);
+
+  const handleResetConCuotas = async (codigo = 'ORD-2026-0001') => {
+    setResettingConCuotas(true);
+    try {
+      const res = await api.resetConCuotasPayers(codigo);
+      setStatusBanner(`✓ ${res.mensaje}`);
+      setSelectedOrdenId(1);
+      await cargarOrdenDetalle(1);
+      await cargarOverview();
+    } catch (err: any) {
+      alert(`Error reseteando orden: ${err.message}`);
+    } finally {
+      setResettingConCuotas(false);
+    }
+  };
 
   const handleSimularAlerta = async (etapa: '4h' | '12h' | '24h') => {
     setSimulandoAlerta(true);
@@ -829,6 +846,58 @@ export default function PayersModulePage() {
               </div>
             </div>
 
+            {/* Casos Clave Demo (Pills de Selección Rápida) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-blue-500" />
+                <span>Casos Clave Demo:</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => handleSelectOrden(1)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedOrdenId === 1
+                    ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <span>👩‍🎓 Alessy Tania (ORD-2026-0001 • 3 cuotas)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectOrden(42)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedOrdenId === 42
+                    ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <span>👨‍🎓 Harry Sánchez (ORD-2026-0042 • Contado)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleResetConCuotas('ORD-2026-0001')}
+                disabled={resettingConCuotas}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/70 dark:hover:bg-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Restaura a Alessy al estado acordado en LEADS con 3 cuotas para repetir la demo completa"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${resettingConCuotas ? 'animate-spin' : ''}`} />
+                <span>↺ Resetear Alessy a 3 Cuotas (LEADS)</span>
+              </button>
+
+              <Link
+                href="/admin/live-chat"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 transition-all flex items-center gap-1.5 sm:ml-auto"
+                title="Abrir simulador de chat en vivo para Fase 2 (LEADS)"
+              >
+                <span>💬 Ir a Simulador LEADS (Fase 2)</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
             <div className="flex flex-col xl:flex-row xl:items-center gap-3">
               <div className="flex-1 min-w-0">
                 <select
@@ -1056,43 +1125,101 @@ export default function PayersModulePage() {
               </div>
             </div>
 
-            {/* COLUMNA CENTRAL (5 cols): Simulador de Chat WhatsApp con Escenarios Determinísticos */}
+            {/* COLUMNA CENTRAL (5 cols): Simulador de Chat WhatsApp / Telegram con Escenarios Determinísticos */}
             <div className="lg:col-span-5 flex flex-col glass-panel rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-              {/* Cabecera estilo WhatsApp Business */}
-              <div className="p-3.5 bg-gradient-to-r from-emerald-700 to-teal-700 text-white flex items-center justify-between">
+              {/* Cabecera dinámica WhatsApp / Telegram */}
+              <div
+                className={`p-3.5 text-white flex items-center justify-between transition-colors duration-300 ${
+                  canalVisual === 'WHATSAPP'
+                    ? 'bg-gradient-to-r from-emerald-700 to-teal-700'
+                    : 'bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-700'
+                }`}
+              >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-                    <Bot className="w-5 h-5" />
+                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                    {canalVisual === 'WHATSAPP' ? (
+                      <Bot className="w-5 h-5 text-white" />
+                    ) : (
+                      <Send className="w-4 h-4 text-white" />
+                    )}
                   </div>
                   <div>
-                    <h3 className="font-heading text-xs sm:text-sm font-black">
-                      Agente IA de Cobranza PAYERS (v2.0)
+                    <h3 className="font-heading text-xs sm:text-sm font-black flex items-center gap-1.5">
+                      <span>Agente IA PAYERS</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/20 font-bold">
+                        {canalVisual === 'WHATSAPP' ? '💬 WhatsApp Business' : '✈️ Telegram Bot'}
+                      </span>
                     </h3>
-                    <p className="text-[10px] text-emerald-100">
-                      Guardarraíles Determinísticos RN-01 a RN-10 • 0% Alucinación de Pagos
+                    <p className="text-[10px] opacity-90">
+                      {canalVisual === 'WHATSAPP'
+                        ? 'Guardarraíles RN-01 a RN-10 • 0% Alucinación • Meta Cloud API'
+                        : 'Sincronizado con @inbestiga_tesis_bot • Long-Polling Activo'}
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono bg-black/25 px-2 py-0.5 rounded">
-                  Ventana: {ordenDetalle?.orden?.ventana_whatsapp_tipo || '24H'}
-                </span>
+
+                {/* Switcher visual de Canal */}
+                <div className="flex items-center bg-black/25 p-1 rounded-xl gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCanalVisual('WHATSAPP')}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      canalVisual === 'WHATSAPP'
+                        ? 'bg-emerald-500 text-white shadow-xs'
+                        : 'text-white/70 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Modo WhatsApp Business: interfaz visual estilo Meta WhatsApp Cloud API"
+                  >
+                    <span>💬 WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCanalVisual('TELEGRAM')}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      canalVisual === 'TELEGRAM'
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'text-white/70 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Modo Telegram Bot: interfaz visual sincronizada con el bot real @inbestiga_tesis_bot"
+                  >
+                    <span>✈️ Telegram</span>
+                  </button>
+                </div>
               </div>
 
               {/* Botones de Escenarios de Prueba Rápida */}
               <div className="p-3 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                  Escenarios de Prueba Rápida (Click para enviar):
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    Escenarios de Prueba Rápida (Click para enviar):
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Canal:{' '}
+                    <strong className={canalVisual === 'WHATSAPP' ? 'text-emerald-600' : 'text-sky-600'}>
+                      {canalVisual}
+                    </strong>
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {SCENARIOS_PRUEBA.map((sc) => (
                     <button
                       key={sc.id}
                       onClick={() => handleSendChat(sc.mensaje)}
                       disabled={sendingChat}
-                      className="text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 transition-colors cursor-pointer disabled:opacity-50 ${
+                        canalVisual === 'WHATSAPP'
+                          ? 'hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                          : 'hover:bg-sky-50 dark:hover:bg-sky-950/40'
+                      }`}
                     >
                       <span className="truncate text-slate-800 dark:text-slate-200">{sc.label}</span>
-                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0">
+                      <span
+                        className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                          canalVisual === 'WHATSAPP'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
+                        }`}
+                      >
                         {sc.ruleBadge}
                       </span>
                     </button>
@@ -1101,7 +1228,13 @@ export default function PayersModulePage() {
               </div>
 
               {/* Historial de Mensajes */}
-              <div className="p-4 space-y-3 flex-1 min-h-[340px] max-h-[420px] overflow-y-auto bg-slate-100/70 dark:bg-slate-950/60">
+              <div
+                className={`p-4 space-y-3 flex-1 min-h-[340px] max-h-[420px] overflow-y-auto transition-colors ${
+                  canalVisual === 'WHATSAPP'
+                    ? 'bg-slate-100/70 dark:bg-slate-950/60'
+                    : 'bg-slate-100/90 dark:bg-slate-950/80'
+                }`}
+              >
                 {ordenDetalle?.mensajes?.map((m: any) => {
                   const esBot = m.emisor === 'BOT';
                   return (
@@ -1113,11 +1246,19 @@ export default function PayersModulePage() {
                         className={`max-w-[88%] p-3 rounded-2xl text-xs whitespace-pre-line shadow-xs ${
                           esBot
                             ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-tl-xs'
-                            : 'bg-emerald-600 text-white rounded-tr-xs'
+                            : canalVisual === 'WHATSAPP'
+                              ? 'bg-emerald-600 text-white rounded-tr-xs'
+                              : 'bg-sky-600 text-white rounded-tr-xs'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3 mb-1 text-[10px] opacity-75 font-mono">
-                          <strong>{esBot ? '🤖 Agente PAYERS v2' : '👩‍🎓 Tesista'}</strong>
+                          <strong>
+                            {esBot
+                              ? canalVisual === 'WHATSAPP'
+                                ? '🤖 Agente PAYERS (WhatsApp)'
+                                : '🤖 @inbestiga_tesis_bot (Telegram)'
+                              : '👩‍🎓 Tesista'}
+                          </strong>
                           <span>
                             {m.fecha_mensaje
                               ? new Date(m.fecha_mensaje).toLocaleTimeString([], {
@@ -1146,13 +1287,23 @@ export default function PayersModulePage() {
                   type="text"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Escribe como el tesista (ej. Quiero pagar con Yape / Cambiar a 3 cuotas)..."
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder={
+                    canalVisual === 'WHATSAPP'
+                      ? 'Escribe como el tesista en WhatsApp (ej. Quiero pagar con Yape / Cuotas)...'
+                      : 'Escribe como el tesista en Telegram (ej. Ya pagué / Pásame el enlace)...'
+                  }
+                  className={`flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:ring-2 ${
+                    canalVisual === 'WHATSAPP' ? 'focus:ring-emerald-500' : 'focus:ring-sky-500'
+                  }`}
                 />
                 <button
                   type="submit"
                   disabled={sendingChat || !chatInput.trim()}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all ${
+                    canalVisual === 'WHATSAPP'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-sky-600 hover:bg-sky-700'
+                  }`}
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Enviar</span>
