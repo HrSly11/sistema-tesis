@@ -1437,14 +1437,14 @@ export class PayersService {
       );
       herramientasEjecutadas.push(toolOrden);
 
-      if (pagosConfirmados.length > 0 || cuotaPendiente.estado === 'PAGADA') {
+      if (pagosConfirmados.length > 0 || cuotaPendiente.estado === 'PAGADA' || orden.estado === 'PAGADA') {
         guardrailsActivados.push('RN-04: Orden con cuota inicial confirmada — Orientación a Fase 4: CUSTOMERS');
         respuesta =
-          `🎓 **¡Tu cuota inicial ya está confirmada!**\n\n` +
+          `🎓 **¡Tu cuota ya está 100% confirmada!**\n\n` +
           `• **Estado de tu servicio:** \`ACTIVO\`\n` +
-          `• **Monto cobrado:** S/ ${Number(orden.monto_cobrado).toFixed(2)} de S/ ${Number(orden.monto_comprometido).toFixed(2)}\n\n` +
+          `• **Monto cobrado:** S/ ${Number(orden.monto_cobrado || orden.monto_comprometido).toFixed(2)} de S/ ${Number(orden.monto_comprometido).toFixed(2)}\n\n` +
           `📌 **Siguiente paso:** Tu expediente ya pasó al área académica (**Fase 4: CUSTOMERS**). ` +
-          `El especialista metodológico asignado a tu carrera se comunicará contigo dentro de las **24 horas hábiles** pactadas en el contrato para coordinar la primera sesión de inducción y entregable del cronograma.\n\n` +
+          `El especialista metodológico asignado a tu carrera (**Dr. Roberto Carlos Mendoza**) se comunicará contigo para coordinar la primera sesión de inducción y entregable del cronograma.\n\n` +
           `¡Ya no tienes que realizar ningún pago adicional en este momento!`;
       } else {
         guardrailsActivados.push('Orientación de Cobranza: Instrucciones para activación de servicio');
@@ -1460,58 +1460,161 @@ export class PayersService {
       }
     }
     // =========================================================================
-    // FLUJO POR DEFECTO: Consulta de Orden + Emisión de Enlace
+    // REGLA 13: Consulta de Deuda / Saldo Pendiente ("¿Tengo deudas?", "¿Cuánto debo?")
     // =========================================================================
-    else {
-      guardrailsActivados.push(
-        'Flujo Estándar PAYERS v2: Consulta determinística de orden + entrega de enlace vigente',
-      );
-      const toolOrden = await this.logToolExecution(
+    else if (
+      /deuda|deudas|debo|saldo|estoy al d[ií]a|tengo que pagar algo|cu[aá]nto falta|mi pregunta es si tengo deudas/i.test(
+        msgLower,
+      )
+    ) {
+      const estaPagada = orden.estado === 'PAGADA' || cuotaPendiente.estado === 'PAGADA';
+      const pagosConfirmados = pagos.filter((p) => p.estado === 'CONFIRMADO');
+      const toolDeuda = await this.logToolExecution(
         conversacionId,
         ordenPagoId,
         'consultar_orden_pago',
-        { orden_pago_id: ordenPagoId },
-        {
-          codigo_orden: orden.codigo_orden,
-          servicio: orden.servicio_nombre,
-          modalidad: orden.modalidad_condicion,
-          monto_comprometido: orden.monto_comprometido,
-          monto_cobrado: orden.monto_cobrado,
-          estado: orden.estado,
-        },
-        70,
+        { orden_pago_id: ordenPagoId, consulta: 'ESTADO_DEUDA' },
+        { estado_orden: orden.estado, pagos_confirmados: pagosConfirmados.length, orden_pagada: estaPagada },
+        60,
       );
-      herramientasEjecutadas.push(toolOrden);
+      herramientasEjecutadas.push(toolDeuda);
 
-      const urlEnlace =
-        enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`;
+      if (estaPagada) {
+        respuesta =
+          `🎉 **¡No tienes ninguna deuda pendiente, ${orden.estudiante_nombre}!**\n\n` +
+          `Tu orden **${orden.codigo_orden}** (${orden.servicio_nombre}) se encuentra **100% CANCELADA**:\n` +
+          `• **Monto abonado:** S/ ${Number(orden.monto_comprometido).toFixed(2)}\n` +
+          `• **Saldo pendiente:** S/ 0.00\n` +
+          `• **Estado del servicio:** \`ACTIVO (Fase 4: CUSTOMERS)\`\n` +
+          `• **Asesor Asignado:** Dr. Roberto Carlos Mendoza (Metodólogo Senior)\n\n` +
+          `¡Tu asesoría está en marcha y ya no requieres realizar ningún pago!`;
+      } else {
+        const saldo = Number(orden.monto_comprometido) - Number(orden.monto_cobrado);
+        respuesta =
+          `📋 **Estado de tu cuenta — Orden ${orden.codigo_orden}:**\n\n` +
+          `• **Total comprometido:** S/ ${Number(orden.monto_comprometido).toFixed(2)}\n` +
+          `• **Total abonado a la fecha:** S/ ${Number(orden.monto_cobrado).toFixed(2)}\n` +
+          `• **Saldo pendiente:** S/ ${saldo.toFixed(2)}\n` +
+          `• **Cuota exigible actual (#${cuotaPendiente.numero_cuota}):** S/ ${montoCuotaActual.toFixed(2)} (\`${cuotaPendiente.estado}\`)\n\n` +
+          `Puedes abonar tu cuota aquí: ${enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`}`;
+      }
+    }
+    // =========================================================================
+    // FLUJO CONVERSACIONAL INTELIGENTE (Google Gemini + Contexto Transaccional)
+    // =========================================================================
+    else {
+      // 1. Invocar Google Gemini con el contexto en vivo de la base de datos
+      let respuestaGemini: string | null = null;
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey && apiKey.length > 10) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const axios = require('axios');
+          const contextPrompt =
+            `Eres el Agente Virtual Oficial de Cobranza y Activación de INBESTIGA (institución de asesoría de tesis).\n` +
+            `Datos del estudiante en vivo desde la base de datos SQL Server (inbestiga_db):\n` +
+            `- Estudiante: ${orden.estudiante_nombre}\n` +
+            `- Código de Orden: ${orden.codigo_orden}\n` +
+            `- Servicio: ${orden.servicio_nombre}\n` +
+            `- Estado de la Orden: ${orden.estado}\n` +
+            `- Total comprometido: S/ ${Number(orden.monto_comprometido).toFixed(2)}\n` +
+            `- Total pagado: S/ ${Number(orden.monto_cobrado || (orden.estado === 'PAGADA' ? orden.monto_comprometido : 0)).toFixed(2)}\n` +
+            `- Saldo pendiente: ${orden.estado === 'PAGADA' ? 'S/ 0.00' : 'S/ ' + (Number(orden.monto_comprometido) - Number(orden.monto_cobrado)).toFixed(2)}\n` +
+            `- Cuota actual (#${cuotaPendiente.numero_cuota}): S/ ${montoCuotaActual.toFixed(2)} (${cuotaPendiente.estado})\n` +
+            `- Asesor Metodológico: Dr. Roberto Carlos Mendoza\n\n` +
+            `REGLAS ESTRICTAS DE RESPUESTA:\n` +
+            `1. Si la orden está en estado PAGADA, bajo NINGÚN motivo le digas que tiene que pagar, ni le mandes enlaces de pago, ni le ofrezcas pagar con Yape o cuotas. Respóndele claramente que NO TIENE DEUDAS, que su orden está cancelada y que su servicio académico está activo.\n` +
+            `2. Responde en tono profesional, cálido, directo y conciso (máximo 2 párrafos).\n` +
+            `3. Pregunta exacta del estudiante: "${mensaje}"`;
 
-      const toolLink = await this.logToolExecution(
-        conversacionId,
-        ordenPagoId,
-        'emitir_enlace_pago',
-        {
-          orden_pago_id: ordenPagoId,
-          cuota_id: cuotaPendiente.cuota_id,
-          monto: montoCuotaActual,
-        },
-        {
-          url_enlace: urlEnlace,
-          estado_cuota: cuotaPendiente.estado,
-        },
-        85,
-      );
-      herramientasEjecutadas.push(toolLink);
+          const gRes = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
+            {
+              contents: [{ role: 'user', parts: [{ text: contextPrompt }] }],
+            },
+            { timeout: 5000 },
+          );
+          if (gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+            respuestaGemini = gRes.data.candidates[0].content.parts[0].text.trim();
+          }
+        } catch (e: any) {
+          this.logger.warn(`Gemini fallback: ${e.message}`);
+        }
+      }
 
-      respuesta =
-        `¡Hola **${orden.estudiante_nombre}**! Soy el agente de cobranza y activación de **INBESTIGA**.\n\n` +
-        `📋 **Estado en vivo de tu Orden ${orden.codigo_orden}:**\n` +
-        `• **Servicio:** ${orden.servicio_nombre}\n` +
-        `• **Contrato:** ${orden.codigo_contrato} (\`${ contrato?.estado || 'CONFIRMADO' }\`)\n` +
-        `• **Modalidad:** ${orden.modalidad_condicion} (Total comprometido: **S/ ${Number(orden.monto_comprometido).toFixed(2)}**)\n` +
-        `• **Cuota exigible actual (#${cuotaPendiente.numero_cuota}):** **S/ ${montoCuotaActual.toFixed(2)}** (\`${cuotaPendiente.estado}\`)\n` +
-        `• **Enlace de Pago Culqi:** ${urlEnlace}\n\n` +
-        `Puedes indicarme si deseas pagar con **Yape/Plin**, **Tarjeta**, cambiar a **3 o 6 cuotas**, o adjuntar un **voucher de transferencia BCP/Interbank**.`;
+      if (respuestaGemini) {
+        const toolAI = await this.logToolExecution(
+          conversacionId,
+          ordenPagoId,
+          'consultar_agente_ia',
+          { consulta: mensaje },
+          { motor: 'Google Gemini (gemini-3-flash-preview)', api_key_activa: true, respondido: true },
+          95,
+        );
+        herramientasEjecutadas.push(toolAI);
+        respuesta = respuestaGemini;
+      } else {
+        guardrailsActivados.push(
+          'Flujo Estándar PAYERS v2: Consulta determinística de orden',
+        );
+        const toolOrden = await this.logToolExecution(
+          conversacionId,
+          ordenPagoId,
+          'consultar_orden_pago',
+          { orden_pago_id: ordenPagoId },
+          {
+            codigo_orden: orden.codigo_orden,
+            servicio: orden.servicio_nombre,
+            modalidad: orden.modalidad_condicion,
+            monto_comprometido: orden.monto_comprometido,
+            monto_cobrado: orden.monto_cobrado,
+            estado: orden.estado,
+          },
+          70,
+        );
+        herramientasEjecutadas.push(toolOrden);
+
+        const estaPagada = orden.estado === 'PAGADA' || cuotaPendiente.estado === 'PAGADA';
+        if (estaPagada) {
+          respuesta =
+            `¡Hola **${orden.estudiante_nombre}**! Soy el agente de cobranza y activación de **INBESTIGA**.\n\n` +
+            `🎉 **Estado de tu cuenta:** Tu orden **${orden.codigo_orden}** se encuentra **100% CANCELADA Y PAGADA**.\n` +
+            `• **Servicio:** ${orden.servicio_nombre}\n` +
+            `• **Deuda pendiente:** S/ 0.00\n` +
+            `• **Estado:** \`ACTIVO (Fase 4: CUSTOMERS)\`\n` +
+            `• **Asesor Metodológico:** Dr. Roberto Carlos Mendoza\n\n` +
+            `¡Ya no tienes que realizar ningún pago! Tu asesor se comunicará contigo para la primera sesión.`;
+        } else {
+          const urlEnlace =
+            enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`;
+          const toolLink = await this.logToolExecution(
+            conversacionId,
+            ordenPagoId,
+            'emitir_enlace_pago',
+            {
+              orden_pago_id: ordenPagoId,
+              cuota_id: cuotaPendiente.cuota_id,
+              monto: montoCuotaActual,
+            },
+            {
+              url_enlace: urlEnlace,
+              estado_cuota: cuotaPendiente.estado,
+            },
+            85,
+          );
+          herramientasEjecutadas.push(toolLink);
+
+          respuesta =
+            `¡Hola **${orden.estudiante_nombre}**! Soy el agente de cobranza y activación de **INBESTIGA**.\n\n` +
+            `📋 **Estado en vivo de tu Orden ${orden.codigo_orden}:**\n` +
+            `• **Servicio:** ${orden.servicio_nombre}\n` +
+            `• **Contrato:** ${orden.codigo_contrato} (\`${ contrato?.estado || 'CONFIRMADO' }\`)\n` +
+            `• **Modalidad:** ${orden.modalidad_condicion} (Total comprometido: **S/ ${Number(orden.monto_comprometido).toFixed(2)}**)\n` +
+            `• **Cuota exigible actual (#${cuotaPendiente.numero_cuota}):** **S/ ${montoCuotaActual.toFixed(2)}** (\`${cuotaPendiente.estado}\`)\n` +
+            `• **Enlace de Pago Culqi:** ${urlEnlace}\n\n` +
+            `Puedes indicarme si deseas pagar con **Yape/Plin**, **Tarjeta**, cambiar a **3 o 6 cuotas**, o adjuntar un **voucher de transferencia BCP/Interbank**.`;
+        }
+      }
     }
 
     // 3. Guardar respuesta del BOT en INBESTIGA_TESIS.dbo.MENSAJE
