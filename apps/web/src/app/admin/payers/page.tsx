@@ -1,3 +1,5 @@
-import PayersModulePage from '../../(admin)/payers/page';
+import PayersModule from '@/components/payers/PayersModule';
 
-export default PayersModulePage;
+export default function PayersOrdenesPage() {
+  return <PayersModule vista="ORDENES" />;
+}

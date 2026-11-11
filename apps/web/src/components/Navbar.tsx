@@ -15,15 +15,33 @@ import {
   BookOpen,
   Receipt,
   CreditCard,
+  Layers,
+  ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import ThemeToggle from '@/components/ThemeToggle';
+
+type NavLink = { href: string; label: string; icon: any; highlight?: boolean };
+type NavGroup = { label: string; icon: any; highlight?: boolean; children: NavLink[] };
+type NavEntry = NavLink | NavGroup;
+const isGroup = (e: NavEntry): e is NavGroup => 'children' in e;
 
 export default function Navbar() {
   const pathname = usePathname();
   const [waConnected, setWaConnected] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenGroup(null);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
 
   useEffect(() => {
     api
@@ -38,19 +56,45 @@ export default function Navbar() {
 
   useEffect(() => {
     setMobileMenuOpen(false);
+    setOpenGroup(null);
   }, [pathname]);
 
-  const navItems = [
+  const navEntries: NavEntry[] = [
     { href: '/', label: 'Inicio', icon: GraduationCap },
     { href: '/formulario', label: 'Formulario', icon: FileText },
-    { href: '/admin/buyers', label: 'Buyers', icon: Users },
-    { href: '/admin/live-chat', label: 'Live Chat', icon: MessageSquare },
-    { href: '/payers', label: 'Payers (R-PAYERS)', icon: CreditCard, highlight: true },
+    {
+      label: 'LEADS',
+      icon: Users,
+      children: [
+        { href: '/admin/buyers', label: 'Buyers', icon: Users },
+        { href: '/admin/live-chat', label: 'Live Chat', icon: MessageSquare },
+      ],
+    },
+    {
+      label: 'PAYERS',
+      icon: CreditCard,
+      highlight: true,
+      children: [
+        { href: '/admin/payers', label: 'Órdenes de Pago', icon: Layers },
+        { href: '/admin/payers/live-chat', label: 'Live Chat', icon: MessageSquare },
+        { href: '/admin/payers/reporte', label: 'Reporte BI R-PAYERS', icon: BarChart3 },
+        { href: '/admin/payers/evaluacion', label: 'Evaluación del Agente', icon: ShieldCheck },
+      ],
+    },
     { href: '/admin/dashboard', label: 'Dashboard BI', icon: BarChart3 },
     { href: '/admin/customers', label: 'Bitácora', icon: BookOpen },
     { href: '/admin/comprobantes', label: 'Comprobantes', icon: Receipt },
     { href: '/admin/agent-config', label: 'Agente IA', icon: Bot },
   ];
+
+  // Ruta activa más específica dentro de un grupo (evita marcar "Órdenes" cuando se está en su sub-ruta)
+  const isChildActive = (href: string, siblings: NavLink[]) => {
+    if (pathname === href) return true;
+    if (!pathname.startsWith(href + '/')) return false;
+    return !siblings.some((s) => s.href !== href && s.href.startsWith(href + '/') && pathname.startsWith(s.href));
+  };
+  const isLinkActive = (href: string) =>
+    pathname === href || (href !== '/' && pathname.startsWith(href));
 
   return (
     <header className="sticky top-0 z-50 glass-panel border-b border-slate-200 dark:border-slate-800/80 shadow-md transition-colors duration-200">
@@ -77,11 +121,58 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden xl:flex items-center gap-1">
-            {navItems.map((item) => {
+          <nav ref={navRef} className="hidden xl:flex items-center gap-1">
+            {navEntries.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
 
+              if (isGroup(item)) {
+                const groupActive = item.children.some((c) => isChildActive(c.href, item.children));
+                const open = openGroup === item.label;
+                return (
+                  <div key={item.label} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpenGroup(open ? null : item.label)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                        groupActive
+                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                          : item.highlight
+                            ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-800/80 border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10'
+                            : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${groupActive ? 'text-white' : item.highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                      {item.label}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {open && (
+                      <div className="absolute left-0 top-full mt-2 min-w-[210px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1.5 space-y-0.5 animate-fade-in">
+                        {item.children.map((c) => {
+                          const CIcon = c.icon;
+                          const active = isChildActive(c.href, item.children);
+                          return (
+                            <Link
+                              key={c.href}
+                              href={c.href}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+                                active
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <CIcon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-slate-400'}`} />
+                              {c.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const isActive = isLinkActive(item.href);
               return (
                 <Link
                   key={item.href}
@@ -89,25 +180,16 @@ export default function Navbar() {
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                      : item.highlight
-                        ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-800/80 border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10'
-                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  <Icon
-                    className={`w-3.5 h-3.5 ${
-                      isActive
-                        ? 'text-white'
-                        : item.highlight
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  />
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
                   {item.label}
                 </Link>
               );
             })}
           </nav>
+
 
           {/* Right Status Actions & Mobile Menu Toggle */}
           <div className="flex items-center gap-2 shrink-0">
@@ -158,9 +240,13 @@ export default function Navbar() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {navItems.map((item) => {
+            {navEntries.flatMap((item) =>
+              isGroup(item)
+                ? item.children.map((c) => ({ ...c, label: `${item.label} · ${c.label}`, highlight: item.highlight, group: item.children }))
+                : [{ ...item, group: [] as NavLink[] }],
+            ).map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+              const isActive = item.group.length ? isChildActive(item.href, item.group) : isLinkActive(item.href);
 
               return (
                 <Link

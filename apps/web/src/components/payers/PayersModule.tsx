@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -34,7 +34,7 @@ import { api } from '@/lib/api';
 
 type PayersTab = 'REPORTE_BI' | 'AGENTE_IA' | 'BANDEJA_ORDENES' | 'EVALUACION_AGENTE';
 
-const SCENARIOS_PRUEBA = [
+export const SCENARIOS_PRUEBA = [
   {
     id: 'contrato',
     label: '1. Confirmar contrato y pedir enlace',
@@ -85,8 +85,31 @@ const SCENARIOS_PRUEBA = [
   },
 ];
 
-export default function PayersModulePage() {
-  const [activeTab, setActiveTab] = useState<PayersTab>('REPORTE_BI');
+export type PayersVista = 'ORDENES' | 'REPORTE' | 'EVALUACION';
+
+const VISTA_TO_TAB: Record<PayersVista, PayersTab> = {
+  ORDENES: 'BANDEJA_ORDENES',
+  REPORTE: 'REPORTE_BI',
+  EVALUACION: 'EVALUACION_AGENTE',
+};
+
+const VISTA_TITULOS: Record<PayersVista, { titulo: string; desc: string }> = {
+  ORDENES: {
+    titulo: 'Órdenes de Pago (Padrón PAYERS)',
+    desc: 'Todas las órdenes traspasadas desde LEADS con acuerdo de pago y enlace generado. Abrí el chat de cualquier orden para retomar la conversación de cobranza.',
+  },
+  REPORTE: {
+    titulo: 'Reporte BI R-PAYERS',
+    desc: 'KPIs P01–P06 y Vistas 3.1, 3.2 y 3.3 sobre INBESTIGA_MART.',
+  },
+  EVALUACION: {
+    titulo: 'Matriz de Evaluación del Agente de Cobranza',
+    desc: 'Batería de casos que valida guardarraíles y precisión de herramientas.',
+  },
+};
+
+export default function PayersModule({ vista }: { vista: PayersVista }) {
+  const activeTab: PayersTab = VISTA_TO_TAB[vista];
   const [overview, setOverview] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [etlRunning, setEtlRunning] = useState<boolean>(false);
@@ -327,10 +350,10 @@ export default function PayersModulePage() {
             </span>
           </div>
           <h1 className="font-heading text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-            Agente IA de Cobranza Automatizada & Reporte BI R-PAYERS
+            {VISTA_TITULOS[vista].titulo}
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-4xl">
-            Gestión integral del traspaso desde LEADS (<code>HANDOFF_LEADS</code>), confirmación de contrato, fraccionamiento en cuotas por hito, pasarela Culqi (Webhook HMAC-SHA256), validación de vouchers en Caja y activación automática a CUSTOMERS.
+            {VISTA_TITULOS[vista].desc}
           </p>
         </div>
 
@@ -373,59 +396,6 @@ export default function PayersModulePage() {
           </button>
         </div>
       )}
-
-      {/* Barra de Navegación de las 4 Pestañas en 2 renglones (sin scroll horizontal) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pb-2 border-b border-slate-200 dark:border-slate-800">
-        <button
-          onClick={() => setActiveTab('REPORTE_BI')}
-          className={`px-4 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2.5 cursor-pointer text-left ${
-            activeTab === 'REPORTE_BI'
-              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 ring-2 ring-emerald-500/20'
-              : 'text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
-          <span className="truncate">1. Reporte BI R-PAYERS (KPIs P01–P06 & Vistas 3.1, 3.2, 3.3)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('AGENTE_IA')}
-          className={`px-4 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2.5 cursor-pointer text-left ${
-            activeTab === 'AGENTE_IA'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 ring-2 ring-blue-500/20'
-              : 'text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60'
-          }`}
-        >
-          <Bot className="w-4 h-4 shrink-0 text-blue-500 dark:text-blue-400" />
-          <span className="truncate">2. Agente IA de Cobranza (Simulador + 11 Tools + Guardarraíles)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('BANDEJA_ORDENES')}
-          className={`px-4 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2.5 cursor-pointer text-left ${
-            activeTab === 'BANDEJA_ORDENES'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 ring-2 ring-indigo-500/20'
-              : 'text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60'
-          }`}
-        >
-          <Layers className="w-4 h-4 shrink-0 text-indigo-500 dark:text-indigo-400" />
-          <span className="truncate">
-            3. Bandeja de 104 Órdenes & Caja Vouchers ({resumenOp.vouchersPorVerificar || 0} por verificar)
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('EVALUACION_AGENTE')}
-          className={`px-4 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2.5 cursor-pointer text-left ${
-            activeTab === 'EVALUACION_AGENTE'
-              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/25 ring-2 ring-purple-500/20'
-              : 'text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4 shrink-0 text-purple-500 dark:text-purple-400" />
-          <span className="truncate">4. Matriz de Evaluación del Agente ({evalData?.resumen?.totalCasos || 40} Casos)</span>
-        </button>
-      </div>
 
       {/* =========================================================================
           TAB 1: REPORTE BI R-PAYERS (KPIs P01-P06 + VISTAS 3.1, 3.2 Y 3.3)
@@ -824,658 +794,10 @@ export default function PayersModulePage() {
       )}
 
       {/* =========================================================================
-          TAB 2: AGENTE IA DE COBRANZA PAYERS (SIMULADOR WHATSAPP + 11 TOOLS)
-          ========================================================================= */}
-      {activeTab === 'AGENTE_IA' && (
-        <div className="space-y-5">
-          {/* Selector de Orden de Pago (1..104) + Acciones Rápidas de Webhook */}
-          <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
-              <label className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span>Seleccionar Expediente (104 órdenes registradas):</span>
-              </label>
-
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400">
-                  Expediente activo:
-                </span>
-                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-sky-300 border border-blue-200 dark:border-blue-800">
-                  {ordenDetalle?.orden?.codigo_orden || `ORD-2026-${String(selectedOrdenId).padStart(4, '0')}`}
-                </span>
-              </div>
-            </div>
-
-            {/* Casos Clave Demo (Pills de Selección Rápida) */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-blue-500" />
-                <span>Casos Clave Demo:</span>
-              </span>
-
-              <button
-                type="button"
-                onClick={() => handleSelectOrden(1)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedOrdenId === 1
-                    ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400'
-                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <span>👩‍🎓 Alessy Tania (ORD-2026-0001 • 3 cuotas)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectOrden(42)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedOrdenId === 42
-                    ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400'
-                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <span>👨‍🎓 Harry Sánchez (ORD-2026-0042 • Contado)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleResetConCuotas('ORD-2026-0001')}
-                disabled={resettingConCuotas}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/70 dark:hover:bg-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                title="Restaura a Alessy al estado acordado en LEADS con 3 cuotas para repetir la demo completa"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${resettingConCuotas ? 'animate-spin' : ''}`} />
-                <span>↺ Resetear Alessy a 3 Cuotas (LEADS)</span>
-              </button>
-
-              <Link
-                href="/admin/live-chat"
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 transition-all flex items-center gap-1.5 sm:ml-auto"
-                title="Abrir simulador de chat en vivo para Fase 2 (LEADS)"
-              >
-                <span>💬 Ir a Simulador LEADS (Fase 2)</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <select
-                  value={selectedOrdenId}
-                  onChange={(e) => handleSelectOrden(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs cursor-pointer"
-                >
-                  {ordenesDetalle.map((o: any) => (
-                    <option key={o.id_orden_pago} value={o.id_orden_pago}>
-                      {o.codigo_orden} • {o.estudiante} • {o.servicio} • {o.modalidad_pago} • S/{' '}
-                      {Number(o.monto_comprometido).toFixed(2)} [{o.estado_orden}]
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                <button
-                  onClick={() => handleSimularWebhook(selectedOrdenId, 'Yape')}
-                  disabled={simulatingWebhook}
-                  className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap transition-all"
-                  title="Simula un webhook de Culqi/Yape con firma HMAC-SHA256 para acreditar la cuota"
-                >
-                  <Zap className="w-3.5 h-3.5 text-purple-200" />
-                  <span>Simular Webhook Yape/Culqi (HMAC)</span>
-                </button>
-
-                <button
-                  onClick={() => handleSimularWebhook(selectedOrdenId, 'Tarjeta')}
-                  disabled={simulatingWebhook}
-                  className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap transition-all"
-                  title="Simula un webhook de Culqi/Tarjeta para acreditar la orden"
-                >
-                  <CreditCard className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>Simular Webhook Tarjeta</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Cockpit del Expositor: Disparador Manual de Emplazamiento (Sección 5.4) */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
-              <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-300 dark:border-amber-700">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-amber-950 dark:text-amber-200 flex items-center gap-2">
-                      <span>Cockpit del Expositor: Emplazamiento de Cobranza (Sección 5.4)</span>
-                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200 font-mono">EN VIVO</span>
-                    </h4>
-                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                      Dispara a demanda el recordatorio exacto según avance tu presentación sin esperar las horas reales:
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => handleSimularAlerta('4h')}
-                    disabled={simulandoAlerta}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
-                    title="Simula 4 horas sin pago: reenvía enlace de Culqi"
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>1. Disparar 4h (Reenvío Enlace)</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleSimularAlerta('12h')}
-                    disabled={simulandoAlerta}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
-                    title="Simula 12 horas sin pago: ofrece dividir en 6 cuotas"
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>2. Disparar 12h (Ofrecer Cuotas)</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleSimularAlerta('24h')}
-                    disabled={simulandoAlerta}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
-                    title="Simula 24 horas sin respuesta: escalamiento humano y silencio del bot"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>3. Disparar 24h (Escalamiento Humano)</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Layout de 3 Columnas: Estado del Expediente | Simulador WhatsApp | Trazabilidad Tool Calling */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* COLUMNA IZQUIERDA (4 cols): Expediente en Vivo (HANDOFF_LEADS, CONTRATO, CUOTA_PAGO) */}
-            <div className="lg:col-span-4 space-y-4">
-              {/* Tarjeta HANDOFF_LEADS + CONTRATO */}
-              <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <h3 className="font-heading text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <span>Expediente {ordenDetalle?.orden?.codigo_orden}</span>
-                  </h3>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      ordenDetalle?.orden?.estado === 'PAGADA'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                        : ordenDetalle?.orden?.estado === 'PARCIAL'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-sky-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                    }`}
-                  >
-                    {ordenDetalle?.orden?.estado}
-                  </span>
-                </div>
-
-                {loadingOrden || !ordenDetalle ? (
-                  <p className="text-xs text-slate-400 py-4 text-center">Cargando expediente...</p>
-                ) : (
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/70 dark:border-slate-800 space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Tesista:</span>
-                        <strong className="text-slate-900 dark:text-white">
-                          {ordenDetalle.orden.estudiante_nombre}
-                        </strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Universidad / Carrera:</span>
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {ordenDetalle.orden.universidad} • {ordenDetalle.orden.carrera}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Servicio:</span>
-                        <strong className="text-blue-700 dark:text-sky-400">
-                          {ordenDetalle.orden.servicio_nombre}
-                        </strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Modalidad Actual:</span>
-                        <span className="font-mono font-bold text-slate-900 dark:text-white">
-                          {ordenDetalle.orden.modalidad_condicion}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Resumen Financiero de la Orden */}
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                        <span className="text-[10px] text-slate-500 block">Comprometido</span>
-                        <strong className="font-mono text-xs text-slate-900 dark:text-white">
-                          S/ {Number(ordenDetalle.orden.monto_comprometido).toFixed(2)}
-                        </strong>
-                      </div>
-                      <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                        <span className="text-[10px] text-slate-500 block">Exigible</span>
-                        <strong className="font-mono text-xs text-blue-700 dark:text-sky-400">
-                          S/ {Number(ordenDetalle.orden.monto_exigible).toFixed(2)}
-                        </strong>
-                      </div>
-                      <div className="p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 block">Cobrado</span>
-                        <strong className="font-mono text-xs text-emerald-700 dark:text-emerald-400">
-                          S/ {Number(ordenDetalle.orden.monto_cobrado).toFixed(2)}
-                        </strong>
-                      </div>
-                    </div>
-
-                    {/* Paquete HANDOFF_LEADS & CONTRATO */}
-                    <div className="p-2.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/50 space-y-1 text-[11px]">
-                      <div className="flex items-center justify-between font-bold text-blue-900 dark:text-sky-300">
-                        <span>HANDOFF_LEADS: {ordenDetalle.handoff?.estado_traspaso || 'VALIDADO'}</span>
-                        <span>Contrato: {ordenDetalle.contrato?.estado || 'CONFIRMADO'}</span>
-                      </div>
-                      <p className="text-slate-600 dark:text-slate-400 text-[10px]">
-                        {ordenDetalle.handoff?.resumen_conversacion_leads ||
-                          'Propuesta aceptada en LEADS con precio congelado.'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Cronograma de Cuotas (CUOTA_PAGO) */}
-              <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2.5">
-                <h4 className="font-heading text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center justify-between">
-                  <span>Cronograma CUOTA_PAGO</span>
-                  <span className="text-[10px] font-mono text-slate-500">
-                    {ordenDetalle?.cuotas?.length || 0} cuota(s)
-                  </span>
-                </h4>
-
-                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                  {ordenDetalle?.cuotas?.map((c: any) => (
-                    <div
-                      key={c.cuota_id}
-                      className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <span className="font-mono font-bold text-slate-900 dark:text-white">
-                          Cuota #{c.numero_cuota} ({c.porcentaje}%)
-                        </span>
-                        <span className="text-[10px] text-slate-500 block">{c.condicion}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-black text-slate-900 dark:text-white block">
-                          S/ {Number(c.monto_programado).toFixed(2)}
-                        </span>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                            c.estado === 'PAGADA'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                              : c.estado === 'POR_VERIFICAR'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                          }`}
-                        >
-                          {c.estado}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* COLUMNA CENTRAL (5 cols): Simulador de Chat WhatsApp / Telegram con Escenarios Determinísticos */}
-            <div className="lg:col-span-5 flex flex-col glass-panel rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-              {/* Cabecera dinámica WhatsApp / Telegram */}
-              <div
-                className={`p-3.5 text-white flex items-center justify-between transition-colors duration-300 ${
-                  canalVisual === 'WHATSAPP'
-                    ? 'bg-gradient-to-r from-emerald-700 to-teal-700'
-                    : 'bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-700'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                    {canalVisual === 'WHATSAPP' ? (
-                      <Bot className="w-5 h-5 text-white" />
-                    ) : (
-                      <Send className="w-4 h-4 text-white" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-heading text-xs sm:text-sm font-black flex items-center gap-1.5">
-                      <span>Agente IA PAYERS</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/20 font-bold">
-                        {canalVisual === 'WHATSAPP' ? '💬 WhatsApp Business' : '✈️ Telegram Bot'}
-                      </span>
-                    </h3>
-                    <p className="text-[10px] opacity-90">
-                      {canalVisual === 'WHATSAPP'
-                        ? 'Guardarraíles RN-01 a RN-10 • 0% Alucinación • Meta Cloud API'
-                        : 'Sincronizado con @inbestiga_tesis_bot • Long-Polling Activo'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Switcher visual de Canal */}
-                <div className="flex items-center bg-black/25 p-1 rounded-xl gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setCanalVisual('WHATSAPP')}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      canalVisual === 'WHATSAPP'
-                        ? 'bg-emerald-500 text-white shadow-xs'
-                        : 'text-white/70 hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Modo WhatsApp Business: interfaz visual estilo Meta WhatsApp Cloud API"
-                  >
-                    <span>💬 WhatsApp</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCanalVisual('TELEGRAM')}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                      canalVisual === 'TELEGRAM'
-                        ? 'bg-sky-500 text-white shadow-xs'
-                        : 'text-white/70 hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Modo Telegram Bot: interfaz visual sincronizada con el bot real @inbestiga_tesis_bot"
-                  >
-                    <span>✈️ Telegram</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Botones de Escenarios de Prueba Rápida */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                    Escenarios de Prueba Rápida (Click para enviar):
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    Canal:{' '}
-                    <strong className={canalVisual === 'WHATSAPP' ? 'text-emerald-600' : 'text-sky-600'}>
-                      {canalVisual}
-                    </strong>
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {SCENARIOS_PRUEBA.map((sc) => (
-                    <button
-                      key={sc.id}
-                      onClick={() => handleSendChat(sc.mensaje)}
-                      disabled={sendingChat}
-                      className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 transition-colors cursor-pointer disabled:opacity-50 ${
-                        canalVisual === 'WHATSAPP'
-                          ? 'hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                          : 'hover:bg-sky-50 dark:hover:bg-sky-950/40'
-                      }`}
-                    >
-                      <span className="truncate text-slate-800 dark:text-slate-200">{sc.label}</span>
-                      <span
-                        className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                          canalVisual === 'WHATSAPP'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
-                        }`}
-                      >
-                        {sc.ruleBadge}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Historial de Mensajes */}
-              <div
-                className={`p-4 space-y-3 flex-1 min-h-[340px] max-h-[420px] overflow-y-auto transition-colors ${
-                  canalVisual === 'WHATSAPP'
-                    ? 'bg-slate-100/70 dark:bg-slate-950/60'
-                    : 'bg-slate-100/90 dark:bg-slate-950/80'
-                }`}
-              >
-                {ordenDetalle?.mensajes?.map((m: any) => {
-                  const esBot = m.emisor === 'BOT';
-                  return (
-                    <div
-                      key={m.mensaje_id}
-                      className={`flex ${esBot ? 'justify-start' : 'justify-end'}`}
-                    >
-                      <div
-                        className={`max-w-[88%] p-3 rounded-2xl text-xs whitespace-pre-line shadow-xs ${
-                          esBot
-                            ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-tl-xs'
-                            : canalVisual === 'WHATSAPP'
-                              ? 'bg-emerald-600 text-white rounded-tr-xs'
-                              : 'bg-sky-600 text-white rounded-tr-xs'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3 mb-1 text-[10px] opacity-75 font-mono">
-                          <strong>
-                            {esBot
-                              ? canalVisual === 'WHATSAPP'
-                                ? '🤖 Agente PAYERS (WhatsApp)'
-                                : '🤖 @inbestiga_tesis_bot (Telegram)'
-                              : '👩‍🎓 Tesista'}
-                          </strong>
-                          <span>
-                            {m.fecha_mensaje
-                              ? new Date(m.fecha_mensaje).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                              : ''}
-                          </span>
-                        </div>
-                        <div className="leading-relaxed">{m.contenido}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Input de Mensaje */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendChat();
-                }}
-                className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2"
-              >
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder={
-                    canalVisual === 'WHATSAPP'
-                      ? 'Escribe como el tesista en WhatsApp (ej. Quiero pagar con Yape / Cuotas)...'
-                      : 'Escribe como el tesista en Telegram (ej. Ya pagué / Pásame el enlace)...'
-                  }
-                  className={`flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:ring-2 ${
-                    canalVisual === 'WHATSAPP' ? 'focus:ring-emerald-500' : 'focus:ring-sky-500'
-                  }`}
-                />
-                <button
-                  type="submit"
-                  disabled={sendingChat || !chatInput.trim()}
-                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all ${
-                    canalVisual === 'WHATSAPP'
-                      ? 'bg-emerald-600 hover:bg-emerald-700'
-                      : 'bg-sky-600 hover:bg-sky-700'
-                  }`}
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Enviar</span>
-                </button>
-              </form>
-            </div>
-
-            {/* COLUMNA DERECHA (3 cols): Trazabilidad de Herramientas (EJECUCION_HERRAMIENTA) y Guardarraíles */}
-            <div className="lg:col-span-3 space-y-4">
-              {/* Guardarraíles Activados */}
-              <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2.5">
-                <h4 className="font-heading text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Lock className="w-4 h-4 text-emerald-600" />
-                  <span>Guardarraíles Backend Activos</span>
-                </h4>
-                {lastGuardrails.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {lastGuardrails.map((g, i) => (
-                      <div
-                        key={i}
-                        className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-[11px] font-semibold text-emerald-900 dark:text-emerald-200"
-                      >
-                        ✓ {g}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-500">
-                    Envía un mensaje o selecciona un escenario rápido para inspeccionar las reglas RN-01..RN-10 aplicadas en tiempo real.
-                  </p>
-                )}
-              </div>
-
-              {/* Historial EJECUCION_HERRAMIENTA */}
-              <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2.5">
-                <h4 className="font-heading text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Terminal className="w-4 h-4 text-indigo-600" />
-                    <span>Tool Calling Trace</span>
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {ordenDetalle?.ejecucionesHerramienta?.length || 0} calls
-                  </span>
-                </h4>
-
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {ordenDetalle?.ejecucionesHerramienta?.length === 0 ? (
-                    <p className="text-[11px] text-slate-400">
-                      Aún no se han ejecutado herramientas en esta orden.
-                    </p>
-                  ) : (
-                    ordenDetalle?.ejecucionesHerramienta?.map((ej: any) => (
-                      <div
-                        key={ej.ejecucion_id}
-                        className="p-2.5 rounded-xl bg-slate-900 text-slate-100 font-mono text-[10px] space-y-1"
-                      >
-                        <div className="flex items-center justify-between text-emerald-400 font-bold">
-                          <span>⚡ {ej.herramienta}()</span>
-                          <span>{ej.latencia_ms} ms</span>
-                        </div>
-                        <div className="text-slate-400 truncate" title={ej.argumentos_json}>
-                          args: {ej.argumentos_json}
-                        </div>
-                        <div className="text-sky-300 truncate" title={ej.resultado_json}>
-                          res: {ej.resultado_json}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
           TAB 3: BANDEJA DE 104 ÓRDENES DE PAGO + VALIDACIÓN DE VOUCHERS (CAJA)
           ========================================================================= */}
       {activeTab === 'BANDEJA_ORDENES' && (
         <div className="space-y-6">
-          {/* Sección 1: Bandeja de Caja para Validación Manual de Vouchers (RN-06) */}
-          <div className="glass-panel p-5 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-white dark:bg-slate-900 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="font-heading text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-purple-600" />
-                  <span>Bandeja de Caja: Conciliación Manual de Vouchers (INBESTIGA_TESIS.dbo.VOUCHER)</span>
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Regla RN-06: Ningún pago por transferencia o depósito activa el servicio hasta que Caja verifique el comprobante.
-                </p>
-              </div>
-              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                Total Vouchers: {vouchers.length} ({resumenOp.vouchersPorVerificar || 0} pendientes)
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase text-slate-500 font-bold">
-                    <th className="py-2.5 px-3">ID Voucher</th>
-                    <th className="py-2.5 px-3">Orden & Tesista</th>
-                    <th className="py-2.5 px-3">Banco & Operación</th>
-                    <th className="py-2.5 px-3 text-right">Monto OCR</th>
-                    <th className="py-2.5 px-3 text-center">Estado</th>
-                    <th className="py-2.5 px-3 text-center">Acción Caja (RN-06)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {vouchers.slice(0, 12).map((v: any) => {
-                    const pendiente = v.estado === 'POR_VERIFICAR' || v.estado === 'DUDOSO';
-                    return (
-                      <tr key={v.voucher_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="py-2.5 px-3 font-mono font-bold">#{v.voucher_id}</td>
-                        <td className="py-2.5 px-3">
-                          <strong className="text-slate-900 dark:text-white">{v.codigo_orden}</strong>
-                          <span className="block text-[11px] text-slate-500">
-                            {v.estudiante} • {v.servicio}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono">
-                          <span className="font-bold text-slate-800 dark:text-slate-200">{v.banco_ocr}</span> •{' '}
-                          {v.referencia_operacion}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
-                          S/ {Number(v.monto_ocr).toFixed(2)}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                              v.estado === 'VERIFICADO'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : v.estado === 'RECHAZADO'
-                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                            }`}
-                          >
-                            {v.estado}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          {pendiente ? (
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => handleVerificarVoucher(v.voucher_id, 'APROBAR')}
-                                disabled={verifyingVoucherId === v.voucher_id}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
-                              >
-                                ✓ Aprobar
-                              </button>
-                              <button
-                                onClick={() => handleVerificarVoucher(v.voucher_id, 'RECHAZAR')}
-                                disabled={verifyingVoucherId === v.voucher_id}
-                                className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
-                              >
-                                ✕ Rechazar
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-slate-400 font-mono">Conciliado</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* Sección 2: Tabla Completa de las 104 Órdenes de Pago */}
           <div className="glass-panel p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1585,18 +907,106 @@ export default function PayersModulePage() {
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-center">
-                        <button
-                          onClick={() => {
-                            handleSelectOrden(o.id_orden_pago);
-                            setActiveTab('AGENTE_IA');
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer"
+                        <Link
+                          href={`/admin/payers/live-chat?orden=${o.id_orden_pago}`}
+                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer inline-block"
                         >
-                          Abrir en Agente IA
-                        </button>
+                          Abrir Chat
+                        </Link>
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sección 1: Bandeja de Caja para Validación Manual de Vouchers (RN-06) */}
+          <div className="glass-panel p-5 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-white dark:bg-slate-900 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="font-heading text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-purple-600" />
+                  <span>Bandeja de Caja: Conciliación Manual de Vouchers (INBESTIGA_TESIS.dbo.VOUCHER)</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Regla RN-06: Ningún pago por transferencia o depósito activa el servicio hasta que Caja verifique el comprobante.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                Total Vouchers: {vouchers.length} ({resumenOp.vouchersPorVerificar || 0} pendientes)
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase text-slate-500 font-bold">
+                    <th className="py-2.5 px-3">ID Voucher</th>
+                    <th className="py-2.5 px-3">Orden & Tesista</th>
+                    <th className="py-2.5 px-3">Banco & Operación</th>
+                    <th className="py-2.5 px-3 text-right">Monto OCR</th>
+                    <th className="py-2.5 px-3 text-center">Estado</th>
+                    <th className="py-2.5 px-3 text-center">Acción Caja (RN-06)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {vouchers.slice(0, 12).map((v: any) => {
+                    const pendiente = v.estado === 'POR_VERIFICAR' || v.estado === 'DUDOSO';
+                    return (
+                      <tr key={v.voucher_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="py-2.5 px-3 font-mono font-bold">#{v.voucher_id}</td>
+                        <td className="py-2.5 px-3">
+                          <strong className="text-slate-900 dark:text-white">{v.codigo_orden}</strong>
+                          <span className="block text-[11px] text-slate-500">
+                            {v.estudiante} • {v.servicio}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{v.banco_ocr}</span> •{' '}
+                          {v.referencia_operacion}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
+                          S/ {Number(v.monto_ocr).toFixed(2)}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              v.estado === 'VERIFICADO'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : v.estado === 'RECHAZADO'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            }`}
+                          >
+                            {v.estado}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          {pendiente ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleVerificarVoucher(v.voucher_id, 'APROBAR')}
+                                disabled={verifyingVoucherId === v.voucher_id}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                              >
+                                ✓ Aprobar
+                              </button>
+                              <button
+                                onClick={() => handleVerificarVoucher(v.voucher_id, 'RECHAZAR')}
+                                disabled={verifyingVoucherId === v.voucher_id}
+                                className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                              >
+                                ✕ Rechazar
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 font-mono">Conciliado</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
