@@ -39,7 +39,8 @@ export default function CheckoutPage() {
   const esCuotas = (cotizacion?.cuotas || 1) > 1;
   const cuotasTotal = cotizacion?.cuotas || 1;
   const totalContrato = Number(cotizacion?.total || 0);
-  const montoPorCuota = esCuotas ? Math.round((totalContrato / cuotasTotal) * 100) / 100 : totalContrato;
+  const yaPagado = cotizacion?.pagoEstado === 'CONFIRMADO' || cotizacion?.estado === 'PAGADA';
+  const montoPorCuota = Number(cotizacion?.planCuotas?.montoPorCuota) || (esCuotas ? Math.round((totalContrato / cuotasTotal) * 100) / 100 : totalContrato);
   const [tipoAbono, setTipoAbono] = useState<'CUOTA' | 'TOTAL'>('CUOTA');
 
   const montoAPagar = esCuotas && tipoAbono === 'CUOTA' ? montoPorCuota : totalContrato;
@@ -95,7 +96,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-4xl mx-auto py-6 animate-fade-in">
-      {pagoResultado?.status === 'confirmed' ? (
+      {pagoResultado?.status === 'confirmed' || yaPagado ? (
         /* Pantalla de Confirmación de Pago y Transición a CUSTOMER */
         <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-emerald-300 dark:border-emerald-500/40 bg-white dark:bg-emerald-950/20 shadow-xl space-y-6 text-center animate-fade-in">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/40">
@@ -136,7 +137,7 @@ export default function CheckoutPage() {
               </div>
               <div className="truncate">
                 <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Asesor Asignado:</span>
-                <strong className="text-purple-700 dark:text-purple-300">{pagoResultado.resultadoCustomer?.asesorAsignado || 'Dr. Especialista'}</strong>
+                <strong className="text-purple-700 dark:text-purple-300">{pagoResultado?.resultadoCustomer?.asesorAsignado || 'Dr. Roberto Carlos Mendoza (Metodólogo Senior)'}</strong>
               </div>
               <div className="truncate">
                 <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Estado Funnel:</span>
@@ -151,10 +152,10 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {pagoResultado.resultadoCustomer?.primeraSesion?.enlace && (
+            {(pagoResultado?.resultadoCustomer?.primeraSesion?.enlace || yaPagado) && (
               <div className="pt-2">
                 <a
-                  href={pagoResultado.resultadoCustomer.primeraSesion.enlace}
+                  href={pagoResultado?.resultadoCustomer?.primeraSesion?.enlace || 'https://meet.google.com/inb-tesis-asesoria'}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-2.5 px-3 rounded-xl bg-blue-100 hover:bg-blue-200 dark:bg-blue-600/30 dark:hover:bg-blue-600/50 text-blue-800 dark:text-sky-300 border border-blue-300 dark:border-blue-500/40 font-bold flex items-center justify-center gap-2 transition-colors text-xs"
