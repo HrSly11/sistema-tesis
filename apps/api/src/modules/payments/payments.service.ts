@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { PrismaService } from '../../database/prisma.service';
 import { StripeProvider } from './providers/stripe.provider';
 import { CulqiProvider } from './providers/culqi.provider';
+import { MercadoPagoProvider } from './providers/mercadopago.provider';
 import { CustomersService } from '../customers/customers.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly stripeProvider: StripeProvider,
     private readonly culqiProvider: CulqiProvider,
+    private readonly mercadoPagoProvider: MercadoPagoProvider,
     private readonly customersService: CustomersService,
   ) {}
 
@@ -92,7 +94,8 @@ export class PaymentsService {
           },
           pagoId: String(ord.orden_pago_id),
           pagoEstado: ord.orden_estado === 'PAGADA' ? 'CONFIRMADO' : 'PENDIENTE',
-          proveedorPago: 'CULQI',
+          proveedorPago: (process.env.PAYMENT_PROVIDER || 'MERCADOPAGO').toUpperCase(),
+          mercadoPagoPublicKey: process.env.MERCADOPAGO_PUBLIC_KEY || '',
           planCuotas: {
             esCuotas: numCuotas > 1,
             cuotasAcordadas: numCuotas,
@@ -367,6 +370,25 @@ export class PaymentsService {
    * Endpoint de checkout interactivo para la pasarela de pagos.
    * Admite pago directo con Yape (Número + Código de Aprobación OTP de Culqi), Tarjeta de Crédito/Débito o Transferencia.
    */
+  async crearPreferenciaMercadoPago(cotizacionId: string, montoPersonalizado?: number) {
+    this.logger.log(`Creando preferencia de Mercado Pago para cotización/orden: ${cotizacionId}`);
+    const cot = await this.getCotizacion(cotizacionId);
+    const monto =
+      montoPersonalizado && Number(montoPersonalizado) > 0
+        ? Number(montoPersonalizado)
+        : Number(cot.planCuotas?.montoPorCuota || cot.total || 0);
+
+    return this.mercadoPagoProvider.crearCheckout({
+      cotizacionId: cot.codigoCotizacion || cot.id,
+      monto,
+      moneda: 'PEN',
+      descripcion: `INBESTIGA.TESIS - ${cot.servicio} (${cot.codigoCotizacion})`,
+      clienteEmail: cot.estudiante.email,
+      clienteNombre: cot.estudiante.nombres,
+      cuotas: cot.cuotas || 1,
+    });
+  }
+
   async procesarPagoCheckout(dto: {
     cotizacionId: string;
     metodoPago: 'CARD' | 'YAPE' | 'TRANSFER';

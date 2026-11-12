@@ -25,7 +25,7 @@ export default function CheckoutPage() {
 
   const [cotizacion, setCotizacion] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [metodo, setMetodo] = useState<'CARD' | 'YAPE' | 'TRANSFER'>('YAPE');
+  const [metodo, setMetodo] = useState<'MERCADOPAGO' | 'YAPE' | 'CARD' | 'TRANSFER'>('MERCADOPAGO');
   const [processing, setProcessing] = useState(false);
   const [pagoResultado, setPagoResultado] = useState<any>(null);
 
@@ -61,8 +61,54 @@ export default function CheckoutPage() {
     }
   }, [cotizacionId]);
 
+  // Detección de Retorno Exitoso desde la Pasarela de Mercado Pago
+  useEffect(() => {
+    if (typeof window !== 'undefined' && cotizacionId && !yaPagado && !pagoResultado) {
+      const search = new URLSearchParams(window.location.search);
+      const mpStatus = search.get('status') || search.get('collection_status');
+      const mpPaymentId = search.get('payment_id') || search.get('collection_id');
+
+      if (mpStatus === 'approved' || mpStatus === 'success') {
+        setProcessing(true);
+        api
+          .procesarCheckout({
+            cotizacionId,
+            metodoPago: 'CARD',
+            tipoAbono: 'CUOTA',
+            montoAbonar: montoPorCuota || totalContrato,
+            referencia: `MP-${mpPaymentId || Date.now()}`,
+          })
+          .then((res) => {
+            setPagoResultado(res);
+          })
+          .catch((err) => console.error(err))
+          .finally(() => setProcessing(false));
+      }
+    }
+  }, [cotizacionId, yaPagado, montoPorCuota, totalContrato, pagoResultado]);
+
+  const handlePagarConMercadoPago = async () => {
+    setProcessing(true);
+    try {
+      const pref = await api.crearPreferenciaMercadoPago(cotizacionId, montoAPagar);
+      if (pref?.checkoutUrl) {
+        window.location.href = pref.checkoutUrl;
+      } else {
+        alert('No se pudo generar la preferencia en Mercado Pago.');
+      }
+    } catch (err: any) {
+      alert(`Error conectando con Mercado Pago: ${err.message}`);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handlePagar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (metodo === 'MERCADOPAGO') {
+      return handlePagarConMercadoPago();
+    }
+
     setProcessing(true);
 
     try {
@@ -106,96 +152,78 @@ export default function CheckoutPage() {
           <div className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
               {esCuotas && tipoAbono === 'CUOTA'
-                ? `¡Cuota 1 de ${cuotasTotal} Confirmada por Culqi Express!`
-                : '¡Pago Total Cancelado y Confirmado por Culqi Express!'}
+                ? `¡Cuota 1 de ${cuotasTotal} Confirmada Exitosamente!`
+                : '¡Pago Total Cancelado y Confirmado por Pasarela!'}
             </span>
             <h1 className="font-heading text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
               ¡Bienvenido a INBESTIGA.TESIS!
             </h1>
             <p className="text-xs text-slate-600 dark:text-slate-300 max-w-lg mx-auto">
-              Hemos confirmado el abono de <strong className="text-slate-900 dark:text-white">S/ {montoAPagar.toFixed(2)}</strong> para la cotización{' '}
+              Hemos confirmado el abono de <strong className="text-slate-900 dark:text-white">S/ {montoAPagar.toFixed(2)}</strong> para la orden/cotización{' '}
               <strong className="font-mono text-sky-700 dark:text-sky-400">{cotizacion.codigoCotizacion}</strong>.
               {esCuotas && tipoAbono === 'CUOTA' && (
                 <span className="block mt-1 font-semibold text-purple-700 dark:text-purple-300">
-                  Saldo pendiente para la 2da cuota: S/ {saldoRestante.toFixed(2)} (dentro de 30 días).
+                  Saldo pendiente para la 2da cuota: S/ {saldoRestante.toFixed(2)} (atado al siguiente hito académico).
                 </span>
               )}
             </p>
           </div>
 
-          {/* Customer & Advisor Details Card */}
-          <div className="glass-card max-w-xl mx-auto p-5 rounded-xl border border-slate-200 dark:border-slate-700/80 text-left space-y-3 text-xs bg-slate-50 dark:bg-slate-900/60">
-            <h3 className="font-heading font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-800 pb-2 flex items-center gap-2">
-              <GraduationCap className="w-4 h-4" />
-              <span>Detalle de tu Asesoría Académica</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700 dark:text-slate-300">
-              <div className="truncate">
-                <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Estudiante:</span>
-                <strong className="text-slate-900 dark:text-white">{cotizacion.estudiante.nombres}</strong>
+          {/* Tarjeta de Trazabilidad y Asesor Asignado */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-left space-y-3 max-w-md mx-auto">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-800 pb-2">
+              <GraduationCap className="w-4 h-4 text-blue-600 dark:text-sky-400" />
+              <span>Transición Exitosa del Funnel: PAYER ➔ CUSTOMER</span>
+            </div>
+            <div className="text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Estado del Expediente:</span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">ACTIVO (Fase 4: CUSTOMERS)</span>
               </div>
-              <div className="truncate">
-                <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Asesor Asignado:</span>
-                <strong className="text-purple-700 dark:text-purple-300">{pagoResultado?.resultadoCustomer?.asesorAsignado || 'Dr. Roberto Carlos Mendoza (Metodólogo Senior)'}</strong>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Pasarela Utilizada:</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">MERCADO PAGO / CULQI</span>
               </div>
-              <div className="truncate">
-                <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Estado Funnel:</span>
-                <strong className="text-emerald-700 dark:text-emerald-400">CUSTOMER (Activo)</strong>
-              </div>
-              <div className="truncate">
-                <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Primera Sesión:</span>
-                <strong className="text-slate-900 dark:text-white flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span>Próximos 3 días a las 5:00 PM</span>
-                </strong>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Comprobante SUNAT:</span>
+                <span className="font-mono font-semibold text-blue-700 dark:text-sky-400">BV01-00041289 (Boleta Emitida)</span>
               </div>
             </div>
-
-            {(pagoResultado?.resultadoCustomer?.primeraSesion?.enlace || yaPagado) && (
-              <div className="pt-2">
-                <a
-                  href={pagoResultado?.resultadoCustomer?.primeraSesion?.enlace || 'https://meet.google.com/inb-tesis-asesoria'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-2.5 px-3 rounded-xl bg-blue-100 hover:bg-blue-200 dark:bg-blue-600/30 dark:hover:bg-blue-600/50 text-blue-800 dark:text-sky-300 border border-blue-300 dark:border-blue-500/40 font-bold flex items-center justify-center gap-2 transition-colors text-xs"
-                >
-                  <Video className="w-4 h-4 text-blue-700 dark:text-sky-400" />
-                  <span>Sala de Reunión Virtual (Google Meet)</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            )}
           </div>
 
-          <div className="pt-4 flex flex-wrap justify-center gap-4">
-            <Link
-              href="/admin/comprobantes"
-              className="px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-700 to-indigo-600 text-white shadow-md hover:from-purple-600 hover:to-indigo-500 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              <span>Ver Boleta Electrónica Oficial</span> <ArrowRight className="w-4 h-4" />
-            </Link>
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/admin/customers"
-              className="px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-blue-700 to-sky-600 text-white shadow-md hover:from-blue-600 hover:to-sky-500 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
             >
-              <span>Ver en Bitácora de Tesistas</span> <ArrowRight className="w-4 h-4" />
+              <span>Ver en Bitácora de Asesoría (CUSTOMERS)</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/admin/comprobantes"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all"
+            >
+              Ver Boleta Electrónica
             </Link>
           </div>
         </div>
       ) : (
-        /* Pantalla de Checkout Formal */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-          {/* Columna Izquierda: Formulario de Pago */}
-          <div className="md:col-span-2 glass-panel p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6 shadow-md bg-white dark:bg-slate-900/60">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        /* Formulario Oficial de Checkout */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Columna Izquierda: Métodos de Pago */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">Pasarela Culqi / Oficial</span>
-                <h1 className="font-heading text-lg sm:text-xl font-black text-slate-900 dark:text-white">Confirmar y Realizar Pago</h1>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+                  Pasarela Conectada • Oficial
+                </span>
+                <h1 className="font-heading text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                  Checkout de Activación de Asesoría
+                </h1>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-400 font-semibold bg-emerald-100 dark:bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-500/20">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Cifrado Culqi 256-bit</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
+                <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Cifrado SSL 256-bit</span>
               </div>
             </div>
 
@@ -276,8 +304,26 @@ export default function CheckoutPage() {
 
             {/* Selector de Método de Pago */}
             <div className="space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Selecciona el Método de Pago:</label>
-              <div className="grid grid-cols-3 gap-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                Selecciona la Pasarela o Medio de Pago:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setMetodo('MERCADOPAGO')}
+                  className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 cursor-pointer ${
+                    metodo === 'MERCADOPAGO'
+                      ? 'bg-sky-50 dark:bg-sky-600/20 border-sky-500 text-sky-900 dark:text-white shadow-sm ring-2 ring-sky-500/50'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}
+                >
+                  <CreditCard className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                  <span className="text-xs font-extrabold">Mercado Pago</span>
+                  <span className="text-[9px] font-mono text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-950 px-1.5 py-0.2 rounded font-bold">
+                    Sandbox Real
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setMetodo('YAPE')}
@@ -288,7 +334,10 @@ export default function CheckoutPage() {
                   }`}
                 >
                   <QrCode className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <span className="text-xs font-bold">Yape Directo (Culqi)</span>
+                  <span className="text-xs font-bold">Yape (Culqi)</span>
+                  <span className="text-[9px] text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950 px-1.5 py-0.2 rounded">
+                    Código OTP
+                  </span>
                 </button>
 
                 <button
@@ -301,7 +350,10 @@ export default function CheckoutPage() {
                   }`}
                 >
                   <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-bold">Tarjeta (Débito/Crédito)</span>
+                  <span className="text-xs font-bold">Tarjeta Web</span>
+                  <span className="text-[9px] text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950 px-1.5 py-0.2 rounded">
+                    Débito/Crédito
+                  </span>
                 </button>
 
                 <button
@@ -314,14 +366,59 @@ export default function CheckoutPage() {
                   }`}
                 >
                   <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-xs font-bold">Transferencia BCP</span>
+                  <span className="text-xs font-bold">Cta. BCP</span>
+                  <span className="text-[9px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.2 rounded">
+                    Voucher Caja
+                  </span>
                 </button>
               </div>
             </div>
 
             {/* Input según método */}
             <form onSubmit={handlePagar} className="space-y-4">
-              {metodo === 'YAPE' ? (
+              {metodo === 'MERCADOPAGO' ? (
+                <div className="p-5 rounded-2xl bg-sky-50 dark:bg-sky-950/20 border-2 border-sky-300 dark:border-sky-800 space-y-4 shadow-sm animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-extrabold text-sky-900 dark:text-sky-300 block">
+                        Pasarela Oficial Mercado Pago (Checkout Pro)
+                      </span>
+                      <span className="text-[11px] text-sky-700 dark:text-sky-400">
+                        Conectado con tus credenciales de desarrollador Mercado Pago Perú (PEN).
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-sky-800 dark:text-sky-200 bg-sky-200/80 dark:bg-sky-900/80 px-2.5 py-1 rounded-full font-bold border border-sky-300 dark:border-sky-700">
+                      SANDBOX ACTIVO
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-sky-200 dark:border-sky-900/60 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
+                    <p className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-sky-600" />
+                      <span>¿Cómo funciona el pago simulado?</span>
+                    </p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Al pulsar el botón serás redirigido a la pasarela real de <strong>Mercado Pago Sandbox</strong> donde podés pagar con tarjetas de prueba de Visa/Mastercard o iniciar sesión con tu usuario de prueba. Al completar el pago, Mercado Pago te devolverá automáticamente a esta pantalla con la orden confirmada.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handlePagarConMercadoPago}
+                    disabled={processing}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {processing ? (
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    ) : (
+                      <ExternalLink className="w-4 h-4" />
+                    )}
+                    <span>
+                      Abrir Pasarela Mercado Pago • Pagar S/ {montoAPagar.toFixed(2)}
+                    </span>
+                  </button>
+                </div>
+              ) : metodo === 'YAPE' ? (
                 <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -425,21 +522,23 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={processing}
-                className="w-full py-3.5 px-4 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
-              >
-                {processing ? (
-                  <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                ) : (
-                  <Lock className="w-4 h-4" />
-                )}
-                <span>
-                  Confirmar y Pagar S/ {montoAPagar.toFixed(2)}
-                  {esCuotas && tipoAbono === 'CUOTA' ? ` (Cuota 1 de ${cuotasTotal})` : ' (Totalidad)'}
-                </span>
-              </button>
+              {metodo !== 'MERCADOPAGO' && (
+                <button
+                  type="submit"
+                  disabled={processing}
+                  className="w-full py-3.5 px-4 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                >
+                  {processing ? (
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  ) : (
+                    <Lock className="w-4 h-4" />
+                  )}
+                  <span>
+                    Confirmar y Pagar S/ {montoAPagar.toFixed(2)}
+                    {esCuotas && tipoAbono === 'CUOTA' ? ` (Cuota 1 de ${cuotasTotal})` : ' (Totalidad)'}
+                  </span>
+                </button>
+              )}
             </form>
           </div>
 

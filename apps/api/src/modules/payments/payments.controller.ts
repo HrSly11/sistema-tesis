@@ -50,6 +50,12 @@ export class PaymentsController {
     return this.paymentsService.procesarWebhook(payload, signature);
   }
 
+  @Post('mercadopago/preference')
+  @ApiOperation({ summary: 'Genera una preferencia en Mercado Pago Checkout Pro (Sandbox o Producción)' })
+  async crearPreferenciaMercadoPago(@Body() body: { cotizacionId: string; monto?: number }) {
+    return this.paymentsService.crearPreferenciaMercadoPago(body.cotizacionId, body.monto);
+  }
+
   @Post('checkout/procesar')
   @ApiOperation({ summary: 'Procesar pago desde la interfaz web de Checkout con Yape directo (Culqi) o Tarjeta' })
   async procesarCheckout(

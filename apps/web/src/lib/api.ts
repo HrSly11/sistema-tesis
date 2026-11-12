@@ -104,6 +104,11 @@ export const api = {
 
   // Pagos, Checkout y Comprobantes Oficiales (Legacy / Pasarela Real)
   getCotizacionCheckout: (cotizacionId: string) => fetchApi(`/payments/cotizacion/${cotizacionId}`),
+  crearPreferenciaMercadoPago: (cotizacionId: string, monto?: number) =>
+    fetchApi('/payments/mercadopago/preference', {
+      method: 'POST',
+      body: JSON.stringify({ cotizacionId, monto }),
+    }),
   procesarCheckout: (data: any) =>
     fetchApi('/payments/checkout/procesar', {
       method: 'POST',
