@@ -2013,6 +2013,90 @@ export class PayersService {
   }
 
   /**
+   * Recupera la activación (PAYER + CUSTOMER + asesor) de una orden que ya tiene pagos confirmados.
+   * Útil para órdenes cuyo pago se registró antes de existir la activación automática.
+   */
+  async activarServicioPorCodigoOrden(codigoOrden: string) {
+    const clean = codigoOrden.replace(/'/g, "''");
+    const rows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1 op.orden_pago_id, pr.lead_id
+      FROM INBESTIGA_TESIS.dbo.ORDEN_PAGO op
+      INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = op.propuesta_id
+      WHERE op.codigo_orden = '${clean}'
+        AND EXISTS (
+          SELECT 1 FROM INBESTIGA_TESIS.dbo.PAGO pg
+          WHERE pg.orden_pago_id = op.orden_pago_id AND pg.estado = 'CONFIRMADO'
+        );
+    `);
+    if (rows.length === 0) return null;
+    return this.activarServicioTrasPrimerPago(Number(rows[0].orden_pago_id), Number(rows[0].lead_id));
+  }
+
+  /**
+   * RN-04 (versión completa): al primer pago confirmado crea PAYER + CUSTOMER y asigna un asesor real.
+   * Es idempotente: si ya existe el customer o la asignación, los reutiliza.
+   * Asignación: asesor activo del equipo de Investigación con menos clientes asignados (balanceo de carga).
+   */
+  async activarServicioTrasPrimerPago(
+    ordenPagoId: number,
+    leadId: number,
+  ): Promise<{ customerId: number; asesor: { id: number; nombre: string; especialidad: string; rol: string } | null }> {
+    await this.asegurarActivacionPayerYCustomer(ordenPagoId, leadId);
+
+    const custRows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT cu.customer_id
+      FROM INBESTIGA_TESIS.dbo.CUSTOMER cu
+      INNER JOIN INBESTIGA_TESIS.dbo.PAYER py ON py.payer_id = cu.payer_id
+      WHERE py.orden_pago_id = ${ordenPagoId};
+    `);
+    const customerId = Number(custRows[0].customer_id);
+
+    const asignadoRows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1 a.asesor_id, a.nombre, a.especialidad, a.rol
+      FROM INBESTIGA_TESIS.dbo.ASIGNACION_ASESOR aa
+      INNER JOIN INBESTIGA_TESIS.dbo.ASESOR a ON a.asesor_id = aa.asesor_id
+      WHERE aa.customer_id = ${customerId}
+      ORDER BY aa.fecha_asignacion DESC;
+    `);
+    if (asignadoRows.length > 0) {
+      const a = asignadoRows[0];
+      return {
+        customerId,
+        asesor: { id: Number(a.asesor_id), nombre: a.nombre, especialidad: a.especialidad, rol: a.rol },
+      };
+    }
+
+    const candidatos: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT TOP 1 a.asesor_id, a.nombre, a.especialidad, a.rol
+      FROM INBESTIGA_TESIS.dbo.ASESOR a
+      WHERE a.activo = 1 AND a.equipo = N'Investigación'
+      ORDER BY (
+        SELECT COUNT(*) FROM INBESTIGA_TESIS.dbo.ASIGNACION_ASESOR x WHERE x.asesor_id = a.asesor_id
+      ) ASC, a.asesor_id ASC;
+    `);
+    if (candidatos.length === 0) {
+      this.logger.warn(`Sin asesores activos del equipo de Investigación para asignar al customer ${customerId}.`);
+      return { customerId, asesor: null };
+    }
+
+    const elegido = candidatos[0];
+    await this.prisma.$executeRawUnsafe(`
+      INSERT INTO INBESTIGA_TESIS.dbo.ASIGNACION_ASESOR (customer_id, asesor_id, fecha_asignacion, motivo)
+      VALUES (${customerId}, ${Number(elegido.asesor_id)}, GETDATE(), N'Asignación automática tras primer pago (balanceo de carga)');
+    `);
+
+    return {
+      customerId,
+      asesor: {
+        id: Number(elegido.asesor_id),
+        nombre: elegido.nombre,
+        especialidad: elegido.especialidad,
+        rol: elegido.rol,
+      },
+    };
+  }
+
+  /**
    * Helper RN-04: Garantiza que al primer pago confirmado exista el registro en PAYER y CUSTOMER.
    */
   private async asegurarActivacionPayerYCustomer(ordenPagoId: number, leadId: number) {

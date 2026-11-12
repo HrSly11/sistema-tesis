@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { StripeProvider } from './providers/stripe.provider';
 import { CulqiProvider } from './providers/culqi.provider';
 import { MercadoPagoProvider } from './providers/mercadopago.provider';
+import { PayersService } from '../payers/payers.service';
 import { CustomersService } from '../customers/customers.service';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class PaymentsService {
     private readonly stripeProvider: StripeProvider,
     private readonly culqiProvider: CulqiProvider,
     private readonly mercadoPagoProvider: MercadoPagoProvider,
+    private readonly payersService: PayersService,
     private readonly customersService: CustomersService,
   ) {}
 
@@ -416,12 +418,21 @@ export class PaymentsService {
       confirmados.push({ mpPaymentId: p.id, monto: p.transaction_amount, ...res });
     }
 
+    let activacionRecuperada: any = null;
+    if (aprobados.length > 0 && confirmados.length === 0) {
+      activacionRecuperada = await this.payersService.activarServicioPorCodigoOrden(codigo).catch((e) => {
+        this.logger.error(`No se pudo recuperar la activación de ${codigo}: ${e.message}`);
+        return null;
+      });
+    }
+
     return {
       referencia: codigo,
       pagosEncontrados: pagosMp.length,
       pagosAprobados: aprobados.length,
       nuevosConfirmados: confirmados.length,
       status: aprobados.length > 0 ? 'confirmed' : 'pending',
+      activacionRecuperada,
       confirmados,
     };
   }
@@ -544,25 +555,59 @@ export class PaymentsService {
           WHERE orden_pago_id = ${ordenPagoId};
         `);
 
-        // 5. Enviar notificación push en tiempo real al Telegram del estudiante si está vinculado
+        // 5. Activación real del servicio (RN-04): PAYER + CUSTOMER + asesor asignado
+        let activacion: { customerId: number; asesor: any } | null = null;
+        try {
+          activacion = await this.payersService.activarServicioTrasPrimerPago(ordenPagoId, Number(ord.lead_id));
+        } catch (e: any) {
+          this.logger.error(`No se pudo activar el servicio de la orden ${ord.codigo_orden}: ${e.message}`);
+        }
+
+        const cuotasPendientes = Number(pendientesRows[0]?.pendientes ?? 0);
+        const pasarela = String(referencia).startsWith('MP-')
+          ? 'Mercado Pago'
+          : dto.metodoPago === 'YAPE'
+            ? 'Yape (Culqi)'
+            : dto.metodoPago === 'CARD'
+              ? 'Tarjeta (Culqi)'
+              : 'Transferencia bancaria';
+
+        // 6. Notificación push al Telegram del estudiante si está vinculado
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
         if (ord.telegram_chat_id && botToken && botToken.includes(':')) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-var-requires
             const axios = require('axios');
-            const textoPush =
-              `🎉 *¡Pago Confirmado por Pasarela Culqi!*\n\n` +
-              `Hola *${ord.nombres}*, hemos acreditado exitosamente tu abono en tiempo real:\n` +
-              `• *Orden:* \`${ord.codigo_orden}\`\n` +
-              `• *Importe pagado:* S/ ${montoACobrar.toFixed(2)}\n` +
-              `• *Método:* ${dto.metodoPago === 'YAPE' ? 'Yape Directo (Culqi Express)' : 'Tarjeta (Culqi)'}\n` +
-              `• *Referencia:* \`${referencia}\`\n` +
-              `• *Estado de tu servicio:* \`ACTIVO (Fase 4: CUSTOMERS)\`\n\n` +
-              `👨‍🏫 *Asesor Metodológico Asignado:* Dr. Roberto Carlos Mendoza\n` +
-              `📅 Tu primera sesión de inducción ya está habilitada.`;
+            const esc = (t: any) => String(t ?? '').replace(/[_*`\[]/g, '\\$&');
+            const asesor = activacion?.asesor;
+            const lineas: string[] = [
+              '*Pago confirmado*',
+              '',
+              `Hola *${esc(ord.nombres)}*, acreditamos tu pago:`,
+              `• *Orden:* \`${ord.codigo_orden}\``,
+              `• *Importe:* S/ ${montoACobrar.toFixed(2)}`,
+              `• *Medio:* ${pasarela}`,
+              `• *Referencia:* \`${referencia}\``,
+              '',
+            ];
+            if (cuotasPendientes === 0) {
+              lineas.push('Tu orden quedó *pagada al 100%*.');
+            } else {
+              lineas.push(
+                `Quedan *${cuotasPendientes} cuota(s)* pendientes: se habilitan a medida que se completan los hitos académicos de tu proyecto.`,
+              );
+            }
+            lineas.push('');
+            if (asesor) {
+              lineas.push('Tu asesoría ya está *activa*.');
+              lineas.push(`• *Tu asesor:* ${esc(asesor.nombre)} (${esc(asesor.rol)} · ${esc(asesor.especialidad)})`);
+              lineas.push('Se pondrá en contacto contigo para coordinar tu primera sesión.');
+            } else {
+              lineas.push('Pago acreditado. Estamos asignando a tu asesor y te escribiremos en breve.');
+            }
             await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               chat_id: ord.telegram_chat_id,
-              text: textoPush,
+              text: lineas.join('\n'),
               parse_mode: 'Markdown',
             });
           } catch (e: any) {
@@ -575,10 +620,9 @@ export class PaymentsService {
           pagoId: referencia,
           montoRecibido: montoACobrar,
           resultadoCustomer: {
-            asesorAsignado: 'Dr. Roberto Carlos Mendoza (Metodólogo Senior)',
-            primeraSesion: {
-              enlace: 'https://meet.google.com/inb-tesis-2026',
-            },
+            customerId: activacion?.customerId ?? null,
+            asesorAsignado: activacion?.asesor ? `${activacion.asesor.nombre} (${activacion.asesor.rol})` : null,
+            cuotasPendientes,
           },
         };
       }

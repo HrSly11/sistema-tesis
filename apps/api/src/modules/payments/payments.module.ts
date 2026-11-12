@@ -5,9 +5,10 @@ import { StripeProvider } from './providers/stripe.provider';
 import { CulqiProvider } from './providers/culqi.provider';
 import { MercadoPagoProvider } from './providers/mercadopago.provider';
 import { CustomersModule } from '../customers/customers.module';
+import { PayersModule } from '../payers/payers.module';
 
 @Module({
-  imports: [CustomersModule],
+  imports: [CustomersModule, PayersModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, StripeProvider, CulqiProvider, MercadoPagoProvider],
   exports: [PaymentsService, CulqiProvider, StripeProvider, MercadoPagoProvider],
