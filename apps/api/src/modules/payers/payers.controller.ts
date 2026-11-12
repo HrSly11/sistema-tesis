@@ -1,11 +1,29 @@
 import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PayersService } from './payers.service';
+import { CuotasHitoService } from './cuotas-hito.service';
 
 @ApiTags('Fase 3: PAYERS — Agente de Cobranza v2 & Reporte BI R-PAYERS')
 @Controller('payers')
 export class PayersController {
-  constructor(private readonly payersService: PayersService) {}
+  constructor(
+    private readonly payersService: PayersService,
+    private readonly cuotasHitoService: CuotasHitoService,
+  ) {}
+
+  @Post('ordenes/:id/cuotas/:numero/aprobar-hito')
+  @ApiOperation({
+    summary: 'El asesor aprueba el hito académico de una cuota: pasa de ESPERA_HITO a EXIGIBLE y se notifica al estudiante por Telegram',
+  })
+  async aprobarHito(@Param('id') id: string, @Param('numero') numero: string) {
+    return this.cuotasHitoService.aprobarHito(Number(id), Number(numero));
+  }
+
+  @Post('cuotas/recordatorios/ejecutar')
+  @ApiOperation({ summary: 'Ejecuta ahora el ciclo de recordatorios de cuotas exigibles y escalamiento de hitos vencidos' })
+  async ejecutarRecordatorios() {
+    return this.cuotasHitoService.procesarRecordatorios();
+  }
 
   @Get('overview')
   @ApiOperation({
