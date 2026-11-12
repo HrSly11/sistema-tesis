@@ -69,7 +69,7 @@ export class PayersController {
   @Post('webhook/simular')
   @ApiOperation({
     summary:
-      'Simula un evento firmado HMAC-SHA256 de pasarela Culqi (charge.succeeded), acredita la cuota, actualiza ORDEN_PAGO y activa PAYER + CUSTOMER (RN-04)',
+      'Simula un evento firmado HMAC-SHA256 de pasarela Mercado Pago (payment.updated), acredita la cuota, actualiza ORDEN_PAGO y activa PAYER + CUSTOMER (RN-04)',
   })
   async simularWebhook(
     @Body()

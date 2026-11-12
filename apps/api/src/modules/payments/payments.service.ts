@@ -538,7 +538,7 @@ export class PaymentsService {
             ? Number(dto.montoAbonar)
             : Number(cuotaObjetivo?.monto_programado || ord.monto_comprometido);
 
-        let referencia = dto.referencia || `chg_culqi_${ordenPagoId}_${Date.now().toString().slice(-6)}`;
+        let referencia = dto.referencia || `MP-${ordenPagoId}-${Date.now().toString().slice(-6)}`;
         if (dto.metodoPago === 'YAPE') {
           const yapeRes = await this.culqiProvider.cobrarConYapeDirecto({
             cotizacionId: ord.codigo_orden,
@@ -610,9 +610,9 @@ export class PaymentsService {
         const pasarela = String(referencia).startsWith('MP-')
           ? 'Mercado Pago'
           : dto.metodoPago === 'YAPE'
-            ? 'Yape (Culqi)'
+            ? 'Yape (Mercado Pago)'
             : dto.metodoPago === 'CARD'
-              ? 'Tarjeta (Culqi)'
+              ? 'Tarjeta (Mercado Pago)'
               : 'Transferencia bancaria';
 
         // 6. Notificación push al Telegram del estudiante si está vinculado

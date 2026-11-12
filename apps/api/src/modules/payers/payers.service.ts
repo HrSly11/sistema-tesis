@@ -335,7 +335,16 @@ export class PayersService {
         ct.email AS estudiante_email,
         ct.ventana_whatsapp_tipo,
         ct.consentimiento,
-        ct.no_contactar
+        ct.no_contactar,
+        ISNULL((
+          SELECT TOP 1 a.nombre
+          FROM INBESTIGA_TESIS.dbo.PAYER py
+          INNER JOIN INBESTIGA_TESIS.dbo.CUSTOMER cu ON cu.payer_id = py.payer_id
+          INNER JOIN INBESTIGA_TESIS.dbo.ASIGNACION_ASESOR aa ON aa.customer_id = cu.customer_id
+          INNER JOIN INBESTIGA_TESIS.dbo.ASESOR a ON a.asesor_id = aa.asesor_id
+          WHERE py.orden_pago_id = o.orden_pago_id
+          ORDER BY aa.fecha_asignacion DESC
+        ), N'Dr. Carlos Alberto Méndez Vargas') AS asesor_nombre
       FROM INBESTIGA_TESIS.dbo.ORDEN_PAGO o
       INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = o.propuesta_id
       INNER JOIN INBESTIGA_TESIS.dbo.LEAD l ON l.lead_id = pr.lead_id
@@ -622,7 +631,7 @@ export class PayersService {
       respuesta =
         `🛡️ [Guardarraíl Determinístico Activo] Como agente automatizado de cobranza de INBESTIGA, no tengo permisos para confirmar pagos por instrucciones de chat ni alterar el precio acordado (${orden.codigo_orden}: S/ ${Number(orden.monto_comprometido).toFixed(2)}).\n\n` +
         `La acreditación de pagos se realiza exclusivamente mediante:\n` +
-        `1. Webhook firmado (HMAC-SHA256) desde la pasarela oficial Culqi (${pagosConfirmados.length} pagos confirmados en BD para esta orden).\n` +
+        `1. Confirmación verificada desde la pasarela oficial Mercado Pago (${pagosConfirmados.length} pagos confirmados en BD para esta orden).\n` +
         `2. Validación en bandeja de Caja de un comprobante bancario (VOUCHER).\n\n` +
         `Tu cuota #${cuotaPendiente.numero_cuota} por S/ ${montoCuotaActual.toFixed(2)} sigue en estado ${cuotaPendiente.estado}. ¿Deseas que te comparta el enlace oficial de pago?`;
     }
@@ -833,10 +842,10 @@ export class PayersService {
 
         respuesta =
           `• **Enlace directo de pago generado:** Como tu cuota #${cuotaPendiente.numero_cuota} es de **S/ ${montoCuotaActual.toFixed(2)}** (dentro del límite de S/ 500.00 de ${billetera}), he generado tu enlace directo:\n\n` +
-          `• **Enlace Oficial ${billetera} (Culqi):** ${urlLink}\n` +
+          `• **Enlace Oficial ${billetera} (Mercado Pago):** ${urlLink}\n` +
           `• **Orden:** ${orden.codigo_orden} (${orden.servicio_nombre})\n` +
           `• **Monto:** S/ ${montoCuotaActual.toFixed(2)}\n\n` +
-          `Apenas apruebes el pago con tu código de aprobación en ${billetera}, el webhook de Culqi confirmará tu pago en segundos y activará tu servicio automáticamente.`;
+          `Apenas apruebes el pago en ${billetera} o Mercado Pago, el sistema confirmará tu pago en segundos y activará tu servicio automáticamente.`;
       }
     }
     // =========================================================================
@@ -871,12 +880,12 @@ export class PayersService {
 
       respuesta =
         `• **Enlace Oficial de Pago — Orden ${orden.codigo_orden}:**\n\n` +
-        `Estimada **${orden.estudiante_nombre}**, aquí tienes tu enlace directo para abonar de forma segura:\n\n` +
-        `• **Pagar en Pasarela Culqi:** ${urlEnlace}\n\n` +
+        `Hola **${orden.estudiante_nombre}**, aquí tienes tu enlace directo para abonar de forma segura:\n\n` +
+        `• **Pagar en Pasarela Mercado Pago:** ${urlEnlace}\n\n` +
         `• **Servicio:** ${orden.servicio_nombre}\n` +
         `• **Cuota #${cuotaPendiente.numero_cuota}:** S/ ${montoCuotaActual.toFixed(2)} (\`${cuotaPendiente.estado}\`)\n` +
-        `• **Medios aceptados:** Yape Directo (hasta S/ 500.00), Tarjeta de Débito/Crédito y Transferencia BCP.\n\n` +
-        `Una vez acreditado tu abono, tu servicio se activará en tiempo real y daremos aviso al Dr. Roberto Carlos Mendoza para iniciar tus asesorías.`;
+        `• **Medios aceptados:** Mercado Pago (Tarjeta de Crédito/Débito, Yape, PagoEfectivo) y Transferencia BCP.\n\n` +
+        `Una vez acreditado tu abono, tu servicio queda activo con tu asesor asignado (**${orden.asesor_nombre || 'Dr. Carlos Alberto Méndez Vargas'}**).`;
     }
     // =========================================================================
     // REGLA 5: Envío de Voucher / Transferencia Manual (RN-06)
@@ -1002,11 +1011,11 @@ export class PayersService {
         herramientasEjecutadas.push(toolEsc);
 
         respuesta =
-          `• **Reporte Escalado:** He derivado inmediatamente tu reporte de **cobro duplicado** como \`RECLAMO_PAGO\` al Administrador de Caja para que concilie las transacciones en Culqi y procese la devolución correspondiente.`;
+          `• **Reporte Escalado:** He derivado inmediatamente tu reporte de **cobro duplicado** como \`RECLAMO_PAGO\` al Administrador de Caja para que concilie las transacciones en Mercado Pago y procese la devolución correspondiente.`;
       } else if (pagosConfirmados.length > 0 && orden.estado === 'PAGADA') {
         respuesta =
           `• **Estado Confirmado:** He consultado la base de datos transaccional (**INBESTIGA_TESIS**) y confirmo que tu orden **${orden.codigo_orden}** registra **${pagosConfirmados.length} pago(s) CONFIRMADO(S)** por un total de **S/ ${Number(orden.monto_cobrado).toFixed(2)}**.\n\n` +
-          `Tu servicio ya se encuentra **ACTIVO** en la fase **CUSTOMERS**.`;
+          `Tu servicio ya se encuentra **ACTIVO** con tu asesor asignado (**${orden.asesor_nombre || 'Dr. Carlos Alberto Méndez Vargas'}**).`;
       } else if (pagosPorVerificar.length > 0) {
         respuesta =
           `• **En Proceso de Verificación:** He consultado la base de datos y veo que tienes un comprobante registrado en estado **POR_VERIFICAR** (Ref: \`${pagosPorVerificar[0].referencia}\`).\n\n` +
@@ -1014,7 +1023,7 @@ export class PayersService {
       } else {
         respuesta =
           `• **Consulta de Pago en Línea:** He verificado en tiempo real la base de datos (**PAGO** y **EVENTO_WEBHOOK**) para tu orden **${orden.codigo_orden}** y aún **no figura ningún pago confirmado** para la cuota #${cuotaPendiente.numero_cuota} (S/ ${montoCuotaActual.toFixed(2)}).\n\n` +
-          `• Si pagaste por **enlace Culqi (Yape/Plin/Tarjeta)**, puedes usar el botón **"Simular Webhook Pasarela"** o indicarme el código de cargo.\n` +
+          `• Si pagaste por **Mercado Pago**, puedes verificarlo en el enlace de checkout o indicarme el número de operación.\n` +
           `• Si hiciste una **transferencia o depósito BCP/Interbank**, envíame el número de operación para registrarlo en Caja (\`POR_VERIFICAR\`).`;
       }
     }
@@ -1082,7 +1091,7 @@ export class PayersService {
           `✅ **Contrato Confirmado Oficialmente (${orden.codigo_contrato || 'CTR-2026'}):**\n` +
           `He registrado tu aceptación del contrato v2.0 en **INBESTIGA_TESIS**.\n\n` +
           `🔗 **Aquí tienes tu enlace de pago habilitado para la Cuota #${cuotaPendiente.numero_cuota}:**\n` +
-          `• **URL Checkout Culqi:** ${urlLink}\n` +
+          `• **URL Checkout Mercado Pago:** ${urlLink}\n` +
           `• **Importe Exigible:** S/ ${montoCuotaActual.toFixed(2)} (${orden.modalidad_condicion})\n` +
           `• **Servicio:** ${orden.servicio_nombre}`;
       } else {
@@ -1430,9 +1439,14 @@ export class PayersService {
       const polRows: any[] = await this.prisma.$queryRawUnsafe(
         `SELECT * FROM INBESTIGA_TESIS.dbo.POLITICA_COBRANZA WHERE tema = '${tema}';`,
       );
-      const pol = polRows[0] || {
+      const rawPol = polRows[0] || {
         titulo: 'Política Oficial INBESTIGA',
-        contenido: 'Operamos con contrato firmado, pasarela auditada Culqi y pagos por entregables verificables.',
+        contenido: 'Operamos con contrato firmado, pasarela auditada Mercado Pago y pagos por entregables verificables.',
+      };
+      const pol = {
+        ...rawPol,
+        titulo: String(rawPol.titulo || '').replace(/Culqi/gi, 'Mercado Pago'),
+        contenido: String(rawPol.contenido || '').replace(/Culqi/gi, 'Mercado Pago'),
       };
 
       await this.prisma.$executeRawUnsafe(`
@@ -1478,13 +1492,13 @@ export class PayersService {
       herramientasEjecutadas.push(toolOrden);
 
       if (pagosConfirmados.length > 0 || cuotaPendiente.estado === 'PAGADA' || orden.estado === 'PAGADA') {
-        guardrailsActivados.push('RN-04: Orden con cuota inicial confirmada — Orientación a Fase 4: CUSTOMERS');
+        guardrailsActivados.push('RN-04: Orden con cuota inicial confirmada — Servicio activo');
         respuesta =
           `🎓 **¡Tu cuota ya está 100% confirmada!**\n\n` +
           `• **Estado de tu servicio:** \`ACTIVO\`\n` +
           `• **Monto cobrado:** S/ ${Number(orden.monto_cobrado || orden.monto_comprometido).toFixed(2)} de S/ ${Number(orden.monto_comprometido).toFixed(2)}\n\n` +
-          `📌 **Siguiente paso:** Tu expediente ya pasó al área académica (**Fase 4: CUSTOMERS**). ` +
-          `El especialista metodológico asignado a tu carrera (**Dr. Roberto Carlos Mendoza**) se comunicará contigo para coordinar la primera sesión de inducción y entregable del cronograma.\n\n` +
+          `📌 **Siguiente paso:** Tu asesoría académica ya está activa. ` +
+          `El especialista metodológico asignado a tu carrera (**${orden.asesor_nombre || 'Dr. Carlos Alberto Méndez Vargas'}**) se comunicará contigo para coordinar la primera sesión de inducción y el entregable del cronograma.\n\n` +
           `¡Ya no tienes que realizar ningún pago adicional en este momento!`;
       } else {
         guardrailsActivados.push('Orientación de Cobranza: Instrucciones para activación de servicio');
@@ -1494,7 +1508,7 @@ export class PayersService {
           `📋 **Para activar tu servicio y asignarte asesor metodológico:**\n\n` +
           `Solo falta completar el abono de tu cuota inicial (**S/ ${montoCuotaActual.toFixed(2)}**).\n\n` +
           `Puedes completarlo por cualquiera de estas opciones:\n` +
-          `1. 💳 **Enlace en línea (Tarjeta/Yape):** ${urlEnlace}\n` +
+          `1. 💳 **Enlace en línea (Mercado Pago):** ${urlEnlace}\n` +
           `2. 🏦 **Transferencia bancaria BCP / Interbank:** Cta. Cte. Soles BCP **570-2489103-0-12** (CCI: 00257000248910301235, INBESTIGA SAC) y me adjuntas la captura del voucher por aquí.\n\n` +
           `¿Deseas que te habilite el enlace de pago o prefieres pagar por transferencia?`;
       }
@@ -1529,8 +1543,8 @@ export class PayersService {
           `Tu orden **${orden.codigo_orden}** (${orden.servicio_nombre}) se encuentra **100% CANCELADA**:\n` +
           `• **Monto abonado:** S/ ${totalComprometido.toFixed(2)}\n` +
           `• **Saldo pendiente:** S/ 0.00\n` +
-          `• **Estado del servicio:** \`ACTIVO (Fase 4: CUSTOMERS)\`\n` +
-          `• **Asesor Asignado:** Dr. Roberto Carlos Mendoza (Metodólogo Senior)\n\n` +
+          `• **Estado del servicio:** \`ACTIVO\`\n` +
+          `• **Asesor Asignado:** ${orden.asesor_nombre || 'Dr. Carlos Alberto Méndez Vargas'}\n\n` +
           `¡Tu asesoría está en marcha y ya no requieres realizar ningún pago!`;
       } else {
         respuesta =
@@ -1538,8 +1552,8 @@ export class PayersService {
           `• **Total comprometido:** S/ ${totalComprometido.toFixed(2)}\n` +
           `• **Total abonado a la fecha:** S/ ${totalCobrado.toFixed(2)}\n` +
           `• **Saldo pendiente de pago:** S/ ${saldoPendiente.toFixed(2)}\n` +
-          `• **Cuota exigible actual (#${cuotaPendiente.numero_cuota}):** S/ ${montoCuotaActual.toFixed(2)} (\`${cuotaPendiente.estado}\`)\n\n` +
-          `Puedes abonar tu cuota pendiente directamente aquí: ${enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`}`;
+          `• **Cuota actual (#${cuotaPendiente.numero_cuota}):** S/ ${montoCuotaActual.toFixed(2)} (\`${cuotaPendiente.estado}\`)\n\n` +
+          `Puedes consultar o abonar tu cuota en el enlace oficial de Mercado Pago: ${enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`}`;
       }
     }
     // =========================================================================
@@ -1549,13 +1563,14 @@ export class PayersService {
       const totalComprometido = Number(orden.monto_comprometido || 0);
       const totalCobrado = Number(orden.monto_cobrado || 0);
       const saldoPendiente = Math.max(0, totalComprometido - totalCobrado);
+      const asesorReal = orden.asesor_nombre || 'Dr. Carlos Alberto Méndez Vargas';
 
       const toolAcad = await this.logToolExecution(
         conversacionId,
         ordenPagoId,
         'consultar_asesor_y_entregas',
         { orden_pago_id: ordenPagoId },
-        { asesor: 'Dr. Roberto Carlos Mendoza', estado_orden: orden.estado, saldo_pendiente: saldoPendiente },
+        { asesor: asesorReal, estado_orden: orden.estado, saldo_pendiente: saldoPendiente },
         60,
       );
       herramientasEjecutadas.push(toolAcad);
@@ -1567,11 +1582,11 @@ export class PayersService {
       respuesta =
         `📚 **Detalle de tu Acompañamiento Académico — ${orden.estudiante_nombre}:**\n\n` +
         `• **Servicio:** ${orden.servicio_nombre}\n` +
-        `• **Asesor Metodológico:** Dr. Roberto Carlos Mendoza (Metodólogo Senior)\n` +
+        `• **Asesor Metodológico:** ${asesorReal}\n` +
         `• **Primera Sesión de Inducción:** Se coordina dentro de las primeras **24 a 48 horas hábiles** vía Google Meet.\n` +
-        `• **Primera Entrega de Hito (Capítulo 1):** Programada para el **${fechaEntrega}** (${cuotaPendiente.condicion || 'Entrega verificable'}).\n\n` +
+        `• **Próximo Hito Académico:** Programado para el **${fechaEntrega}** (${cuotaPendiente.condicion || 'Entrega verificable'}).\n\n` +
         (saldoPendiente > 0
-          ? `ℹ️ **Nota de pago:** Tu orden registra un saldo pendiente de **S/ ${saldoPendiente.toFixed(2)}** en tu cuota #${cuotaPendiente.numero_cuota}. Puedes completarlo en: ${enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`}`
+          ? `ℹ️ **Nota de pago:** Tu orden registra un saldo pendiente de **S/ ${saldoPendiente.toFixed(2)}** en tu cuota #${cuotaPendiente.numero_cuota} (\`${cuotaPendiente.estado}\`). Enlace oficial de Mercado Pago: ${enlaceActivo?.url_enlace || `http://localhost:3000/checkout/${orden.codigo_orden}`}`
           : `🎉 Tu expediente se encuentra 100% al día.`);
     }
     // =========================================================================
@@ -1582,6 +1597,7 @@ export class PayersService {
       const totalCobrado = Number(orden.monto_cobrado || 0);
       const saldoPendiente = Math.max(0, totalComprometido - totalCobrado);
       const estaPagada = orden.estado === 'PAGADA' || (saldoPendiente === 0 && totalComprometido > 0);
+      const asesorReal = orden.asesor_nombre || 'Dr. Carlos Alberto Méndez Vargas';
 
       // 1. Invocar Google Gemini con el contexto en vivo de la base de datos
       let respuestaGemini: string | null = null;
@@ -1595,7 +1611,7 @@ export class PayersService {
           const axios = require('axios');
           const contextPrompt =
             `Eres el Agente Virtual Oficial de Cobranza y Activación de INBESTIGA (institución de asesoría de tesis).\n` +
-            `Datos del estudiante en vivo desde la base de datos SQL Server (inbestiga_db):\n` +
+            `Datos del estudiante en vivo desde la base de datos SQL Server:\n` +
             `- Estudiante: ${orden.estudiante_nombre}\n` +
             `- Código de Orden: ${orden.codigo_orden}\n` +
             `- Servicio: ${orden.servicio_nombre}\n` +
@@ -1603,12 +1619,13 @@ export class PayersService {
             `- Total comprometido: S/ ${totalComprometido.toFixed(2)}\n` +
             `- Total pagado a la fecha: S/ ${totalCobrado.toFixed(2)}\n` +
             `- Saldo pendiente real: S/ ${saldoPendiente.toFixed(2)}\n` +
-            `- Cuota actual (#${cuotaPendiente.numero_cuota}): S/ ${montoCuotaActual.toFixed(2)} (${cuotaPendiente.estado})\n` +
-            `- Asesor Metodológico: Dr. Roberto Carlos Mendoza\n` +
-            `- Enlace Oficial de Pago Culqi: ${urlEnlace}\n\n` +
+            `- Cuota actual (#${cuotaPendiente.numero_cuota}): S/ ${montoCuotaActual.toFixed(2)} (Estado: ${cuotaPendiente.estado}, Vence: ${cuotaPendiente.fecha_vencimiento ? String(cuotaPendiente.fecha_vencimiento).slice(0, 10) : 'según hito'})\n` +
+            `- Asesor Metodológico Asignado: ${asesorReal}\n` +
+            `- Pasarela Oficial: Mercado Pago (Checkout Pro)\n` +
+            `- Enlace Oficial de Pago Mercado Pago: ${urlEnlace}\n\n` +
             `REGLAS ESTRICTAS DE RESPUESTA:\n` +
-            `1. Si el saldo pendiente es mayor a 0 (S/ ${saldoPendiente.toFixed(2)}), INDICA QUE TIENE UN SALDO PENDIENTE de S/ ${saldoPendiente.toFixed(2)}. Si el saldo es 0, confirma que no debe nada.\n` +
-            `2. Si el estudiante pide el enlace o cómo pagar, PROPORCIONA SIEMPRE este enlace exacto: ${urlEnlace}. PROHIBIDO usar textos como 'ENLACE DE PAGO AQUÍ' o placeholders ficticios.\n` +
+            `1. Si el saldo pendiente es mayor a 0 (S/ ${saldoPendiente.toFixed(2)}), INDICA QUE TIENE UN SALDO PENDIENTE de S/ ${saldoPendiente.toFixed(2)}. Si la cuota actual está en ESPERA_HITO, explica que el pago de esa cuota se habilita apenas el asesor (${asesorReal}) apruebe el hito académico correspondiente.\n` +
+            `2. Si mencionas el enlace de pago, PROPORCIONA SIEMPRE este enlace exacto de Mercado Pago: ${urlEnlace}. PROHIBIDO mencionar "Culqi" o "Fase 4: CUSTOMERS"; nuestra única pasarela oficial es Mercado Pago.\n` +
             `3. Responde en tono profesional, cálido, directo y conciso (máximo 2 párrafos).\n` +
             `4. Pregunta exacta del estudiante: "${mensaje}"`;
 
@@ -1669,8 +1686,8 @@ export class PayersService {
             `• **Estado de tu cuenta:** Tu orden **${orden.codigo_orden}** se encuentra **100% CANCELADA Y PAGADA**.\n` +
             `• **Servicio:** ${orden.servicio_nombre}\n` +
             `• **Deuda pendiente:** S/ 0.00\n` +
-            `• **Estado:** \`ACTIVO (Fase 4: CUSTOMERS)\`\n` +
-            `• **Asesor Metodológico:** Dr. Roberto Carlos Mendoza\n\n` +
+            `• **Estado:** \`ACTIVO\`\n` +
+            `• **Asesor Metodológico:** ${asesorReal}\n\n` +
             `¡Ya no tienes que realizar ningún pago! Tu asesor se comunicará contigo para la primera sesión.`;
         } else {
           const urlEnlace =
@@ -1740,7 +1757,7 @@ export class PayersService {
 
   /**
    * 4. POST /api/v1/payers/webhook/simular
-   * Simula la recepción de un evento firmado HMAC-SHA256 desde Culqi (charge.succeeded),
+   * Simula la recepción de un evento firmado HMAC-SHA256 desde Mercado Pago (payment.updated),
    * acredita el pago en INBESTIGA_TESIS, actualiza la cuota y orden, y activa PAYER + CUSTOMER (RN-04).
    */
   async simularWebhookPasarela(ordenPagoId: number, medioPagoInput?: 'Yape' | 'Plin' | 'Tarjeta') {
@@ -1764,9 +1781,9 @@ export class PayersService {
     const medioPagoId = medioNombre === 'Yape' ? 1 : medioNombre === 'Plin' ? 2 : 3;
     const comisionPct = medioPagoId === 3 ? 3.99 : 2.95;
     const comisionSoles = Number(((monto * comisionPct) / 100).toFixed(2));
-    const referencia = `chg_live_${ordenPagoId}_${Date.now().toString().slice(-6)}`;
+    const referencia = `MP-${ordenPagoId}-${Date.now().toString().slice(-6)}`;
     const firmaHmac = crypto
-      .createHmac('sha256', 'culqi_hmac_secret_inbestiga_2026')
+      .createHmac('sha256', 'mp_hmac_secret_inbestiga_2026')
       .update(`${referencia}|${monto}|PEN`)
       .digest('hex');
 
@@ -1799,8 +1816,8 @@ export class PayersService {
       INSERT INTO INBESTIGA_TESIS.dbo.EVENTO_WEBHOOK (
         pago_id, proveedor, tipo_evento, referencia_externa, firma_hmac, firma_valida, fecha_recepcion, procesado, detalle
       ) VALUES (
-        ${pagoId}, 'Culqi', 'charge.succeeded', '${referencia}', '${firmaHmac}', 1, GETDATE(), 1,
-        'Webhook Culqi (${medioNombre}) validado con firma HMAC-SHA256. Monto: S/ ${monto.toFixed(2)}'
+        ${pagoId}, 'Mercado Pago', 'payment.updated', '${referencia}', '${firmaHmac}', 1, GETDATE(), 1,
+        'Webhook Mercado Pago (${medioNombre}) validado con firma HMAC-SHA256. Monto: S/ ${monto.toFixed(2)}'
       );
     `);
 
@@ -1838,7 +1855,7 @@ export class PayersService {
     // 8. Registrar Auditoría
     await this.logAuditoria(
       'SISTEMA',
-      'Culqi Webhook HMAC-SHA256',
+      'Mercado Pago Webhook HMAC-SHA256',
       'WEBHOOK_CHARGE_SUCCEEDED',
       'ORDEN_PAGO',
       String(ordenPagoId),
@@ -1849,11 +1866,11 @@ export class PayersService {
 
     return {
       exito: true,
-      mensaje: `Webhook Culqi (${medioNombre}) procesado con firma HMAC válida. Cuota #${cuotaObjetivo.numero_cuota} por S/ ${monto.toFixed(2)} acreditada y servicio activado.`,
+      mensaje: `Webhook Mercado Pago (${medioNombre}) procesado con firma HMAC válida. Cuota #${cuotaObjetivo.numero_cuota} por S/ ${monto.toFixed(2)} acreditada y servicio activado.`,
       eventoWebhook: {
         referencia,
-        proveedor: 'Culqi',
-        tipoEvento: 'charge.succeeded',
+        proveedor: 'Mercado Pago',
+        tipoEvento: 'payment.updated',
         medioPago: medioNombre,
         montoPagado: monto,
         comisionPasarela: comisionSoles,
@@ -2411,8 +2428,8 @@ export class PayersService {
       secuencia = 'Recordatorio 4 h';
       textoTelegram =
         `⏰ *Recordatorio de Activación (4 Horas) — INBESTIGA.TESIS*\n\n` +
-        `Hola * ${ord.nombres}*, han transcurrido *4 horas* desde la emisión de tu propuesta y enlace oficial de pago.\n\n` +
-        `Te reenviamos tu acceso directo seguro de Culqi para completar la Cuota inicial (S/ ${montoCuota.toFixed(2)}):\n` +
+        `Hola *${ord.nombres}*, han transcurrido *4 horas* desde la emisión de tu propuesta y enlace oficial de pago.\n\n` +
+        `Te reenviamos tu acceso directo seguro de Mercado Pago para completar la Cuota inicial (S/ ${montoCuota.toFixed(2)}):\n` +
         `👉 ${urlEnlace}\n\n` +
         `¿Tuviste alguna dificultad con tu banco o pasarela para poder ayudarte?`;
     } else if (etapa === '12h') {

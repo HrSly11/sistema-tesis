@@ -376,7 +376,7 @@ export default function PayersModule({ vista }: { vista: PayersVista }) {
             className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors"
           >
             <Receipt className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
-            <span>Boletas SUNAT / Culqi Legacy</span>
+            <span>Boletas SUNAT / Pasarela</span>
           </Link>
         </div>
       </div>

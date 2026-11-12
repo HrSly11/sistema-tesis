@@ -258,8 +258,7 @@ export class CustomersService {
         WHERE orden_pago_id = ${Number(r.orden_pago_id)}
         ORDER BY numero_cuota ASC;
       `);
-      const ref = String(r.ultima_referencia || '');
-      const metodoPago = ref.startsWith('MP-') ? 'MERCADO PAGO' : 'CULQI';
+      const metodoPago = 'MERCADO PAGO';
       out.push({
         id: `tesis-cust-${r.customer_id}`,
         tesisCustomerId: Number(r.customer_id),

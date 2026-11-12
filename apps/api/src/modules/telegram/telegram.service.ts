@@ -179,7 +179,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
             `• *Servicio:* ${expediente.servicio_nombre}\n` +
             `• *Estado:* \`${expediente.estado}\`\n` +
             `• *Total:* S/ ${Number(expediente.monto_comprometido).toFixed(2)}\n\n` +
-            `¿En qué puedo ayudarte hoy? Puedes solicitar tu enlace oficial de pago Culqi, cambiar a cuotas, pagar con Yape o reportar una transferencia.`;
+            `¿En qué puedo ayudarte hoy? Puedes solicitar tu enlace oficial de pago de Mercado Pago, consultar tus cuotas o reportar una transferencia.`;
           await this.enviarMensaje(chatId, bienvenidaRegistrado);
           return;
         }
@@ -190,7 +190,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         `👋 ¡Hola **${fromUser}**! Te saluda el Agente Virtual de Cobranza y Activación de **INBESTIGA** 🎓.\n\n` +
         `Puedo ayudarte a:\n` +
         `• 📋 Consultar el estado de tu expediente y cronograma de cuotas\n` +
-        `• 💳 Obtener tu enlace oficial de pasarela (Culqi / Tarjeta / Yape / Plin)\n` +
+        `• 💳 Obtener tu enlace oficial de pasarela (Mercado Pago / Tarjeta / Yape)\n` +
         `• 🏦 Solicitar datos de transferencia bancaria BCP / Interbank\n` +
         `• 📝 Confirmar tu contrato de asesoría y garantías\n\n` +
         `👉 *Para vincular permanentemente tu cuenta:* \n` +
@@ -242,7 +242,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
           `• *Servicio:* ${expEncontrado.servicio_nombre}\n` +
           `• *Estado:* \`${expEncontrado.estado}\`\n` +
           `• *Total comprometido:* S/ ${Number(expEncontrado.monto_comprometido).toFixed(2)}\n\n` +
-          `A partir de ahora te reconoceré automáticamente sin pedirte tus datos. ¿En qué te puedo ayudar hoy? (Por ejemplo: ver cuotas, enlace de pago Culqi, pagar con Yape o reportar voucher de transferencia).`;
+          `A partir de ahora te reconoceré automáticamente sin pedirte tus datos. ¿En qué te puedo ayudar hoy? (Por ejemplo: ver cuotas, enlace de pago Mercado Pago o reportar voucher de transferencia).`;
 
         // Si el usuario envió SOLO el teléfono o el botón de contacto
         const textoSinTelefono = text.replace(/(?:(?:\+?51)[\s.-]?)?(9(?:\d[\s.-]?){8})/, '').trim();

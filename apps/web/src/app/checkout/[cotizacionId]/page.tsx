@@ -201,7 +201,7 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 dark:text-slate-400">Pasarela Utilizada:</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">MERCADO PAGO / CULQI</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">MERCADO PAGO CHECKOUT PRO</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 dark:text-slate-400">Comprobante SUNAT:</span>
@@ -465,7 +465,7 @@ export default function CheckoutPage() {
                   }`}
                 >
                   <QrCode className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <span className="text-xs font-bold">Yape (Culqi)</span>
+                  <span className="text-xs font-bold">Yape / Plin</span>
                   <span className="text-[9px] text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950 px-1.5 py-0.2 rounded">
                     Código OTP
                   </span>
@@ -565,11 +565,11 @@ export default function CheckoutPage() {
                 <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-bold text-purple-900 dark:text-purple-300 block">Pago Directo con Yape (Vía Culqi)</span>
+                      <span className="text-xs font-bold text-purple-900 dark:text-purple-300 block">Pago Directo con Yape (Vía Mercado Pago)</span>
                       <span className="text-[11px] text-purple-700 dark:text-purple-400">Sin escanear QR. Débito instantáneo y seguro en tu app.</span>
                     </div>
                     <span className="text-[10px] font-mono text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded font-bold border border-purple-300 dark:border-purple-700">
-                      CULQI + YAPE
+                      MERCADO PAGO + YAPE
                     </span>
                   </div>
 
