@@ -389,6 +389,43 @@ export class PaymentsService {
     });
   }
 
+  /**
+   * Confirma en el sistema los pagos APROBADOS en Mercado Pago para una orden.
+   * Consulta la API de MP por external_reference (sin webhook) y registra cada pago una sola vez.
+   */
+  async verificarPagoMercadoPago(cotizacionId: string) {
+    const cot = await this.getCotizacion(cotizacionId);
+    const codigo = cot.codigoCotizacion || cot.id;
+    const pagosMp = await this.mercadoPagoProvider.buscarPagosPorReferencia(codigo);
+    const aprobados = pagosMp.filter((p) => p.status === 'approved');
+
+    const confirmados: any[] = [];
+    for (const p of aprobados) {
+      const referencia = `MP-${p.id}`;
+      const existente: any[] = await this.prisma.$queryRawUnsafe(`
+        SELECT TOP 1 pago_id FROM INBESTIGA_TESIS.dbo.PAGO WHERE referencia = '${referencia}';
+      `);
+      if (existente.length > 0) continue;
+
+      const res = await this.procesarPagoCheckout({
+        cotizacionId: codigo,
+        metodoPago: 'CARD',
+        montoAbonar: Number(p.transaction_amount),
+        referencia,
+      });
+      confirmados.push({ mpPaymentId: p.id, monto: p.transaction_amount, ...res });
+    }
+
+    return {
+      referencia: codigo,
+      pagosEncontrados: pagosMp.length,
+      pagosAprobados: aprobados.length,
+      nuevosConfirmados: confirmados.length,
+      status: aprobados.length > 0 ? 'confirmed' : 'pending',
+      confirmados,
+    };
+  }
+
   async procesarPagoCheckout(dto: {
     cotizacionId: string;
     metodoPago: 'CARD' | 'YAPE' | 'TRANSFER';

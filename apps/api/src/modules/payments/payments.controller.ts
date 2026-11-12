@@ -56,6 +56,12 @@ export class PaymentsController {
     return this.paymentsService.crearPreferenciaMercadoPago(body.cotizacionId, body.monto);
   }
 
+  @Post('mercadopago/verificar')
+  @ApiOperation({ summary: 'Verifica en Mercado Pago los pagos aprobados de una orden y los confirma en el sistema' })
+  async verificarPagoMercadoPago(@Body() body: { cotizacionId: string }) {
+    return this.paymentsService.verificarPagoMercadoPago(body.cotizacionId);
+  }
+
   @Post('checkout/procesar')
   @ApiOperation({ summary: 'Procesar pago desde la interfaz web de Checkout con Yape directo (Culqi) o Tarjeta' })
   async procesarCheckout(

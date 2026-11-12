@@ -109,6 +109,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ cotizacionId, monto }),
     }),
+  verificarPagoMercadoPago: (cotizacionId: string) =>
+    fetchApi('/payments/mercadopago/verificar', {
+      method: 'POST',
+      body: JSON.stringify({ cotizacionId }),
+    }),
   procesarCheckout: (data: any) =>
     fetchApi('/payments/checkout/procesar', {
       method: 'POST',

@@ -51,11 +51,15 @@ export class MercadoPagoProvider implements PaymentProvider {
             surname: input.clienteNombre?.split(' ').slice(1).join(' ') || 'Investigador',
             email: input.clienteEmail || 'estudiante@inbestiga.pe',
           },
-          back_urls: {
-            success: `${appUrl}/checkout/${input.cotizacionId}?status=approved`,
-            failure: `${appUrl}/checkout/${input.cotizacionId}?status=rejected`,
-            pending: `${appUrl}/checkout/${input.cotizacionId}?status=pending`,
-          },
+          ...(appUrl.startsWith('https://')
+            ? {
+                back_urls: {
+                  success: `${appUrl}/checkout/${input.cotizacionId}?status=approved`,
+                  failure: `${appUrl}/checkout/${input.cotizacionId}?status=rejected`,
+                  pending: `${appUrl}/checkout/${input.cotizacionId}?status=pending`,
+                },
+              }
+            : {}),
           external_reference: input.cotizacionId,
           statement_descriptor: 'INBESTIGA TESIS',
         };
@@ -69,7 +73,9 @@ export class MercadoPagoProvider implements PaymentProvider {
         });
 
         const prefData = response.data;
-        const checkoutUrl = prefData.sandbox_init_point || prefData.init_point;
+        const checkoutUrl = this.accessToken.startsWith('TEST-')
+          ? prefData.sandbox_init_point || prefData.init_point
+          : prefData.init_point || prefData.sandbox_init_point;
         this.logger.log(`✓ Preferencia Mercado Pago creada: ${prefData.id} -> ${checkoutUrl}`);
 
         return {
@@ -91,6 +97,25 @@ export class MercadoPagoProvider implements PaymentProvider {
       proveedor: 'MERCADOPAGO',
       payload: { mode: 'sandbox', cotizacionId: input.cotizacionId, transactionId: fallbackTx },
     };
+  }
+
+  /**
+   * Busca los pagos de Mercado Pago asociados a una orden (external_reference).
+   * Permite confirmar pagos sin webhook, ideal para entornos locales sin URL pública.
+   */
+  async buscarPagosPorReferencia(externalReference: string): Promise<any[]> {
+    if (!this.accessToken) return [];
+    try {
+      const response = await axios.get(`${this.apiUrl}/v1/payments/search`, {
+        params: { external_reference: externalReference, sort: 'date_created', criteria: 'asc' },
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+        timeout: 8000,
+      });
+      return response.data?.results || [];
+    } catch (err: any) {
+      this.logger.warn(`Error buscando pagos de ${externalReference} en Mercado Pago: ${err.message}`);
+      return [];
+    }
   }
 
   /**

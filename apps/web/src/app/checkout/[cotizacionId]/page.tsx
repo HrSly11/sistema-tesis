@@ -61,38 +61,50 @@ export default function CheckoutPage() {
     }
   }, [cotizacionId]);
 
-  // Detección de Retorno Exitoso desde la Pasarela de Mercado Pago
-  useEffect(() => {
-    if (typeof window !== 'undefined' && cotizacionId && !yaPagado && !pagoResultado) {
-      const search = new URLSearchParams(window.location.search);
-      const mpStatus = search.get('status') || search.get('collection_status');
-      const mpPaymentId = search.get('payment_id') || search.get('collection_id');
+  // Verificación del pago en Mercado Pago (sin webhook): al volver a la pestaña o al cargar con un pago pendiente
+  const [verificando, setVerificando] = useState(false);
+  const [mensajeVerificacion, setMensajeVerificacion] = useState<string | null>(null);
 
-      if (mpStatus === 'approved' || mpStatus === 'success') {
-        setProcessing(true);
-        api
-          .procesarCheckout({
-            cotizacionId,
-            metodoPago: 'CARD',
-            tipoAbono: 'CUOTA',
-            montoAbonar: montoPorCuota || totalContrato,
-            referencia: `MP-${mpPaymentId || Date.now()}`,
-          })
-          .then((res) => {
-            setPagoResultado(res);
-          })
-          .catch((err) => console.error(err))
-          .finally(() => setProcessing(false));
+  const verificarPagoMercadoPago = async (manual = false) => {
+    if (!cotizacionId || verificando) return;
+    setVerificando(true);
+    try {
+      const res = await api.verificarPagoMercadoPago(cotizacionId);
+      if (res?.status === 'confirmed') {
+        localStorage.removeItem(`mp_pendiente_${cotizacionId}`);
+        const info = await api.getCotizacionCheckout(cotizacionId);
+        setCotizacion(info);
+        setPagoResultado({ status: 'confirmed', ...res });
+      } else if (manual) {
+        setMensajeVerificacion('Todavía no figura un pago aprobado en Mercado Pago. Completa el pago y vuelve a verificar.');
       }
+    } catch (err: any) {
+      if (manual) setMensajeVerificacion(`No se pudo verificar: ${err.message}`);
+    } finally {
+      setVerificando(false);
     }
-  }, [cotizacionId, yaPagado, montoPorCuota, totalContrato, pagoResultado]);
+  };
+
+  useEffect(() => {
+    if (!cotizacionId || yaPagado || pagoResultado || typeof window === 'undefined') return;
+    const hayPendiente = () => localStorage.getItem(`mp_pendiente_${cotizacionId}`) === '1';
+    if (hayPendiente()) verificarPagoMercadoPago();
+    const onFocus = () => {
+      if (hayPendiente()) verificarPagoMercadoPago();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cotizacionId, yaPagado, pagoResultado]);
 
   const handlePagarConMercadoPago = async () => {
     setProcessing(true);
     try {
       const pref = await api.crearPreferenciaMercadoPago(cotizacionId, montoAPagar);
       if (pref?.checkoutUrl) {
-        window.location.href = pref.checkoutUrl;
+        localStorage.setItem(`mp_pendiente_${cotizacionId}`, '1');
+        window.open(pref.checkoutUrl, '_blank', 'noopener');
+        setMensajeVerificacion('Pasarela abierta en otra pestaña. Al terminar el pago vuelve aquí: se verifica automáticamente.');
       } else {
         alert('No se pudo generar la preferencia en Mercado Pago.');
       }
@@ -417,6 +429,18 @@ export default function CheckoutPage() {
                       Abrir Pasarela Mercado Pago • Pagar S/ {montoAPagar.toFixed(2)}
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => verificarPagoMercadoPago(true)}
+                    disabled={verificando}
+                    className="w-full py-2.5 rounded-xl border border-sky-300 dark:border-sky-700 text-sky-800 dark:text-sky-200 text-xs font-bold hover:bg-sky-100 dark:hover:bg-sky-900/40 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    {verificando ? 'Verificando pago...' : 'Ya pagué, verificar mi pago'}
+                  </button>
+                  {mensajeVerificacion && (
+                    <p className="text-[11px] text-sky-800 dark:text-sky-300 text-center">{mensajeVerificacion}</p>
+                  )}
                 </div>
               ) : metodo === 'YAPE' ? (
                 <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 space-y-4">
