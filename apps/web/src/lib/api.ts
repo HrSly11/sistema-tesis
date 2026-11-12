@@ -167,6 +167,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ codigoOrden }),
     }),
+  aprobarHitoCuota: (ordenPagoId: number, numeroCuota: number) =>
+    fetchApi(`/payers/ordenes/${ordenPagoId}/cuotas/${numeroCuota}/aprobar-hito`, {
+      method: 'POST',
+    }),
+  revertirHitoCuota: (ordenPagoId: number, numeroCuota: number) =>
+    fetchApi(`/payers/ordenes/${ordenPagoId}/cuotas/${numeroCuota}/revertir-hito`, {
+      method: 'POST',
+    }),
+  ejecutarRecordatoriosCuotas: () =>
+    fetchApi('/payers/cuotas/recordatorios/ejecutar', {
+      method: 'POST',
+    }),
 
   // WhatsApp Status
   getWhatsAppStatus: () => fetchApi('/whatsapp/status'),

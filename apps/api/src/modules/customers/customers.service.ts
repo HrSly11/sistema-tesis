@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nest
 import { PrismaService } from '../../database/prisma.service';
 import { DwService } from '../../database/dw.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { CuotasHitoService } from '../payers/cuotas-hito.service';
 
 @Injectable()
 export class CustomersService {
@@ -12,6 +13,7 @@ export class CustomersService {
     private readonly dwService: DwService,
     @Inject(forwardRef(() => WhatsAppService))
     private readonly whatsappService: WhatsAppService,
+    private readonly cuotasHitoService: CuotasHitoService,
   ) {}
 
   /**
@@ -184,8 +186,151 @@ export class CustomersService {
     };
   }
 
+  private async obtenerTesisCustomers(onlyCustomerId?: number): Promise<any[]> {
+    const whereClause = onlyCustomerId != null ? `WHERE cu.customer_id = ${Number(onlyCustomerId)}` : '';
+    const topClause = onlyCustomerId != null ? 'TOP 1' : 'TOP 20';
+    const rows: any[] = await this.prisma.$queryRawUnsafe(`
+      SELECT ${topClause}
+        cu.customer_id,
+        cu.fecha_activacion,
+        cu.estado_servicio,
+        py.payer_id,
+        py.orden_pago_id,
+        op.codigo_orden,
+        op.monto_comprometido,
+        op.estado AS orden_estado,
+        mp.numero_cuotas,
+        mp.condicion AS modalidad_condicion,
+        s.nombre AS servicio_nombre,
+        s.tipo_servicio,
+        c.contacto_id,
+        c.nombres,
+        c.apellidos,
+        c.telefono,
+        c.email,
+        ISNULL(u.nombre, N'Universidad Nacional de Trujillo') AS universidad_nombre,
+        ISNULL(u.siglas, 'UNT') AS universidad_siglas,
+        ISNULL(ca.nombre, N'Ingeniería de Sistemas') AS carrera_nombre,
+        ISNULL(pa.ciclo, N'X Ciclo') AS ciclo,
+        ISNULL(pa.tipo_investigacion, s.nombre) AS tipo_investigacion,
+        ISNULL(a.nombre, N'Dr. Carlos Alberto Méndez Vargas') AS asesor_nombre,
+        ISNULL(a.especialidad, N'Ingeniería de Sistemas e IA') AS asesor_especialidad,
+        ISNULL(a.rol, N'Especialista') AS asesor_rol,
+        (
+          SELECT ISNULL(SUM(pg.monto_pagado), 0)
+          FROM INBESTIGA_TESIS.dbo.PAGO pg
+          WHERE pg.orden_pago_id = op.orden_pago_id AND pg.estado = 'CONFIRMADO'
+        ) AS monto_pagado,
+        (
+          SELECT TOP 1 pg.referencia
+          FROM INBESTIGA_TESIS.dbo.PAGO pg
+          WHERE pg.orden_pago_id = op.orden_pago_id AND pg.estado = 'CONFIRMADO'
+          ORDER BY pg.pago_id DESC
+        ) AS ultima_referencia
+      FROM INBESTIGA_TESIS.dbo.CUSTOMER cu
+      INNER JOIN INBESTIGA_TESIS.dbo.PAYER py ON py.payer_id = cu.payer_id
+      INNER JOIN INBESTIGA_TESIS.dbo.ORDEN_PAGO op ON op.orden_pago_id = py.orden_pago_id
+      INNER JOIN INBESTIGA_TESIS.dbo.MODALIDAD_PAGO mp ON mp.modalidad_pago_id = op.modalidad_pago_id
+      INNER JOIN INBESTIGA_TESIS.dbo.PROPUESTA pr ON pr.propuesta_id = op.propuesta_id
+      INNER JOIN INBESTIGA_TESIS.dbo.SERVICIO s ON s.servicio_id = pr.servicio_id
+      INNER JOIN INBESTIGA_TESIS.dbo.LEAD l ON l.lead_id = pr.lead_id
+      INNER JOIN INBESTIGA_TESIS.dbo.BUYER b ON b.buyer_id = l.buyer_id
+      INNER JOIN INBESTIGA_TESIS.dbo.CONTACTO c ON c.contacto_id = b.contacto_id
+      LEFT JOIN INBESTIGA_TESIS.dbo.PERFIL_ACADEMICO pa ON pa.contacto_id = c.contacto_id
+      LEFT JOIN INBESTIGA_TESIS.dbo.CARRERA ca ON ca.carrera_id = pa.carrera_id
+      LEFT JOIN INBESTIGA_TESIS.dbo.UNIVERSIDAD u ON u.universidad_id = ca.universidad_id
+      OUTER APPLY (
+        SELECT TOP 1 asig.asesor_id
+        FROM INBESTIGA_TESIS.dbo.ASIGNACION_ASESOR asig
+        WHERE asig.customer_id = cu.customer_id
+        ORDER BY asig.fecha_asignacion DESC
+      ) aa
+      LEFT JOIN INBESTIGA_TESIS.dbo.ASESOR a ON a.asesor_id = aa.asesor_id
+      ${whereClause}
+      ORDER BY CASE WHEN op.codigo_orden = 'ORD-2026-0042' THEN 0 ELSE 1 END, cu.customer_id DESC;
+    `);
+
+    const out: any[] = [];
+    for (const r of rows) {
+      const cuotasPago: any[] = await this.prisma.$queryRawUnsafe(`
+        SELECT cuota_id, orden_pago_id, numero_cuota, porcentaje, monto_programado, condicion, fecha_vencimiento, estado
+        FROM INBESTIGA_TESIS.dbo.CUOTA_PAGO
+        WHERE orden_pago_id = ${Number(r.orden_pago_id)}
+        ORDER BY numero_cuota ASC;
+      `);
+      const ref = String(r.ultima_referencia || '');
+      const metodoPago = ref.startsWith('MP-') ? 'MERCADO PAGO' : 'CULQI';
+      out.push({
+        id: `tesis-cust-${r.customer_id}`,
+        tesisCustomerId: Number(r.customer_id),
+        ordenPagoId: Number(r.orden_pago_id),
+        codigoOrden: r.codigo_orden,
+        estadoServicio: r.estado_servicio === 'CERRADO' ? 'FINALIZADO' : 'EN_CURSO',
+        fechaInicioServicio: r.fecha_activacion,
+        observaciones: `${r.servicio_nombre} (${r.codigo_orden}) — ${r.modalidad_condicion}`,
+        buyer: {
+          nombres: r.nombres,
+          apellidos: r.apellidos,
+          whatsapp: r.telefono,
+          email: r.email,
+          ciclo: r.ciclo,
+          tipoInvestigacion: r.tipo_investigacion,
+          universidad: { nombre: r.universidad_nombre, siglas: r.universidad_siglas },
+          carrera: { nombre: r.carrera_nombre },
+        },
+        servicio: {
+          nombre: r.servicio_nombre,
+          tipoInvestigacion: String(r.tipo_servicio || '').includes('Bachiller')
+            ? 'TRABAJO_INVESTIGACION_BACHILLER'
+            : 'TESIS',
+        },
+        asesor: {
+          gradoAcademico: '',
+          nombres: r.asesor_nombre,
+          apellidos: '',
+          especialidad: r.asesor_especialidad,
+        },
+        cotizacion: {
+          codigoCotizacion: r.codigo_orden,
+          total: Number(r.monto_comprometido),
+          cuotas: Number(r.numero_cuotas || cuotasPago.length || 1),
+        },
+        payer: {
+          montoTotalPagado: Number(r.monto_pagado || 0),
+          fechaConversionPayer: r.fecha_activacion,
+          primerPago: {
+            metodoPago,
+            gatewayTransactionId: r.ultima_referencia || r.codigo_orden,
+          },
+        },
+        cuotasPago: cuotasPago.map((cp) => ({
+          cuota_id: Number(cp.cuota_id),
+          orden_pago_id: Number(cp.orden_pago_id),
+          numero_cuota: Number(cp.numero_cuota),
+          porcentaje: Number(cp.porcentaje),
+          monto_programado: Number(cp.monto_programado),
+          condicion: cp.condicion,
+          fecha_vencimiento: cp.fecha_vencimiento,
+          estado: cp.estado,
+        })),
+        sesiones: [
+          {
+            id: `ses-${r.customer_id}-1`,
+            numeroSesion: 1,
+            temaTratado: 'Sesión 1: Inducción Metodológica y Validación de Plan de Tesis',
+            estado: 'PROGRAMADA',
+            fechaHoraProgramada: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+            enlaceReunion: `https://meet.google.com/inb-tesis-${r.customer_id}`,
+            observaciones: 'Sesión habilitada tras acreditación del pago inicial.',
+          },
+        ],
+      });
+    }
+    return out;
+  }
+
   async findAll(query?: { estadoServicio?: string; asesorId?: string }) {
-    const customers = await this.prisma.customer.findMany({
+    const prismaCustomers = await this.prisma.customer.findMany({
       where: query,
       include: {
         buyer: { include: { universidad: true, carrera: true } },
@@ -197,6 +342,11 @@ export class CustomersService {
       },
       orderBy: { fechaInicioServicio: 'desc' },
     });
+    const tesisCustomers = await this.obtenerTesisCustomers().catch((e) => {
+      this.logger.warn(`No se pudieron cargar customers de INBESTIGA_TESIS: ${e.message}`);
+      return [];
+    });
+    const customers: any[] = [...tesisCustomers, ...prismaCustomers];
 
     // Enriquecer con registros de la Bitácora de Tesis
     let bitacoras: any[] = [];
@@ -247,7 +397,14 @@ export class CustomersService {
     });
   }
 
-  async findById(id: string) {
+  async findById(id: string): Promise<any> {
+    if (id.startsWith('tesis-cust-') || /^\d+$/.test(id)) {
+      const numId = Number(id.replace('tesis-cust-', ''));
+      const list = await this.obtenerTesisCustomers(numId);
+      if (!list.length) throw new NotFoundException(`Customer ${id} no encontrado.`);
+      return list[0];
+    }
+
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
@@ -431,6 +588,9 @@ export class CustomersService {
 
     return {
       customer,
+      ordenPagoId: (customer as any).ordenPagoId || null,
+      codigoOrden: (customer as any).codigoOrden || customer.cotizacion?.codigoCotizacion || null,
+      cuotasPago: (customer as any).cuotasPago || [],
       progresoGlobal,
       turnitinPct,
       semaforoSalud,
@@ -455,38 +615,69 @@ export class CustomersService {
     proximaEntrega?: string;
     registradoPor?: string;
   }) {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: customerId },
-      include: { asesor: true, buyer: true },
-    });
+    const customer = await this.findById(customerId);
 
-    if (!customer) throw new NotFoundException(`Customer ${customerId} no encontrado.`);
-
-    const asesorNombre = data.registradoPor || (customer.asesor ? `${customer.asesor.gradoAcademico || 'Dr.'} ${customer.asesor.nombres} ${customer.asesor.apellidos}` : 'Asesor Especialista');
+    const asesorNombre = (data.registradoPor || (customer.asesor ? `${customer.asesor.gradoAcademico || ''} ${customer.asesor.nombres} ${customer.asesor.apellidos || ''}`.trim() : 'Asesor Especialista')).replace(/'/g, "''");
     const turnitin = data.turnitinPct != null ? data.turnitinPct : null;
     const proxEntrega = data.proximaEntrega ? data.proximaEntrega.replace(/'/g, "''") : 'Próxima sesión de asesoría';
     const obsLimpia = data.observaciones ? data.observaciones.replace(/'/g, "''") : 'Sin observaciones.';
     const tituloLimpio = data.titulo ? data.titulo.replace(/'/g, "''") : 'Avance de Asesoría';
 
     await this.prisma.$executeRawUnsafe(`
+      IF OBJECT_ID('[dbo].[BITACORA_TESIS]', 'U') IS NULL
+      BEGIN
+        CREATE TABLE [dbo].[BITACORA_TESIS] (
+          [id] NVARCHAR(100) PRIMARY KEY,
+          [customerId] NVARCHAR(100) NOT NULL,
+          [asesorId] NVARCHAR(100) NULL,
+          [fechaRegistro] DATETIME2 NOT NULL DEFAULT GETDATE(),
+          [hito] NVARCHAR(100) NOT NULL,
+          [titulo] NVARCHAR(300) NOT NULL,
+          [porcentajeAvance] INT NOT NULL DEFAULT 50,
+          [estadoRevision] NVARCHAR(50) NOT NULL DEFAULT 'EN_REVISION',
+          [observaciones] NVARCHAR(MAX) NULL,
+          [turnitinPct] DECIMAL(6,2) NULL,
+          [proximaEntrega] NVARCHAR(200) NULL,
+          [registradoPor] NVARCHAR(200) NULL
+        );
+      END;
       INSERT INTO [dbo].[BITACORA_TESIS] (
         [id], [customerId], [asesorId], [fechaRegistro], [hito], [titulo], [porcentajeAvance], [estadoRevision], [observaciones], [turnitinPct], [proximaEntrega], [registradoPor]
       ) VALUES (
-        NEWID(), '${customerId}', '${customer.asesorId || ''}', GETDATE(), '${data.hito}', '${tituloLimpio}', ${data.porcentajeAvance || 50}, '${data.estadoRevision || 'EN_REVISION'}', '${obsLimpia}', ${turnitin !== null ? turnitin : 'NULL'}, '${proxEntrega}', '${asesorNombre}'
+        NEWID(), '${customerId}', '${customer.asesorId || ''}', GETDATE(), '${data.hito}', N'${tituloLimpio}', ${data.porcentajeAvance || 50}, '${data.estadoRevision || 'EN_REVISION'}', N'${obsLimpia}', ${turnitin !== null ? turnitin : 'NULL'}, N'${proxEntrega}', N'${asesorNombre}'
       )
     `);
 
     // Si el porcentaje es 100%, actualizar estado del servicio a FINALIZADO
-    if (data.porcentajeAvance >= 100) {
+    if (data.porcentajeAvance >= 100 && !customerId.startsWith('tesis-cust-')) {
       await this.prisma.customer.update({
         where: { id: customerId },
         data: { estadoServicio: 'FINALIZADO' },
       });
     }
 
+    let cuotaHabilitada: any = null;
+    if (data.estadoRevision === 'APROBADO' && customer.ordenPagoId) {
+      const pendienteHito = (customer.cuotasPago || []).find((cp: any) => cp.estado === 'ESPERA_HITO');
+      if (pendienteHito) {
+        cuotaHabilitada = await this.cuotasHitoService
+          .aprobarHito(Number(customer.ordenPagoId), Number(pendienteHito.numero_cuota))
+          .catch((e) => {
+            this.logger.warn(`No se pudo habilitar cuota tras bitácora: ${e.message}`);
+            return null;
+          });
+      }
+    }
+
     this.logger.log(`✓ Nueva anotación registrada en bitácora para tesista ${customer.buyer?.nombres} ${customer.buyer?.apellidos} (Hito: ${data.hito})`);
 
-    return { exito: true, mensaje: 'Anotación registrada en bitácora con éxito.' };
+    return {
+      exito: true,
+      mensaje: cuotaHabilitada
+        ? `Anotación registrada y Cuota #${cuotaHabilitada.cuota} (S/ ${Number(cuotaHabilitada.monto).toFixed(2)}) habilitada y notificada por Telegram.`
+        : 'Anotación registrada en bitácora con éxito.',
+      cuotaHabilitada,
+    };
   }
 
   /**

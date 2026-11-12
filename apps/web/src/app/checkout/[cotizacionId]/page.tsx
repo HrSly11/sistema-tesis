@@ -41,10 +41,17 @@ export default function CheckoutPage() {
   const totalContrato = Number(cotizacion?.total || 0);
   const yaPagado = cotizacion?.pagoEstado === 'CONFIRMADO' || cotizacion?.estado === 'PAGADA';
   const montoPorCuota = Number(cotizacion?.planCuotas?.montoPorCuota) || (esCuotas ? Math.round((totalContrato / cuotasTotal) * 100) / 100 : totalContrato);
+  const cuotaActualNumero = Number(cotizacion?.planCuotas?.cuotaActualNumero || 1);
+  const cuotaActualEstado = cotizacion?.planCuotas?.cuotaActualEstado || 'EXIGIBLE';
+  const cuotaActualCondicion = cotizacion?.planCuotas?.cuotaActualCondicion || 'Cuota inicial';
+  const bloqueadaPorHito = Boolean(cotizacion?.planCuotas?.bloqueadaPorHito);
+  const cuotasPagadas = Number(cotizacion?.planCuotas?.cuotasPagadas || 0);
+  const montoPagado = Number(cotizacion?.planCuotas?.montoPagado || 0);
+  const cuotasDetalle: any[] = cotizacion?.planCuotas?.cuotasDetalle || [];
   const [tipoAbono, setTipoAbono] = useState<'CUOTA' | 'TOTAL'>('CUOTA');
 
-  const montoAPagar = esCuotas && tipoAbono === 'CUOTA' ? montoPorCuota : totalContrato;
-  const saldoRestante = Math.max(0, totalContrato - montoAPagar);
+  const montoAPagar = esCuotas && tipoAbono === 'CUOTA' ? montoPorCuota : Math.max(0, totalContrato - montoPagado);
+  const saldoRestante = Math.max(0, totalContrato - montoPagado - montoAPagar);
 
   useEffect(() => {
     if (cotizacionId) {
@@ -219,6 +226,118 @@ export default function CheckoutPage() {
             </Link>
           </div>
         </div>
+      ) : bloqueadaPorHito ? (
+        /* Pantalla de Cuota Bloqueada en Espera de Validación de Hito Académico (Opción B) */
+        <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-amber-300 dark:border-amber-500/40 bg-white dark:bg-slate-900 shadow-xl space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/40 shrink-0">
+              <Lock className="w-7 h-7" />
+            </div>
+            <div className="text-center sm:text-left">
+              <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                Servicio Activo • {cuotasPagadas} de {cuotasTotal} Cuota(s) Pagada(s) (S/ {montoPagado.toFixed(2)})
+              </span>
+              <h1 className="font-heading text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-2">
+                Cuota #{cuotaActualNumero} en Espera de Hito Académico
+              </h1>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                Tu orden <strong className="font-mono text-sky-700 dark:text-sky-400">{cotizacion.codigoCotizacion}</strong> ya tiene el servicio activo. La{' '}
+                <strong>Cuota #{cuotaActualNumero} (S/ {montoPorCuota.toFixed(2)})</strong> se habilitará para pago recién cuando tu asesor apruebe el entregable académico correspondiente.
+              </p>
+            </div>
+          </div>
+
+          {/* Cronograma de Cuotas por Hito */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+              Estado de tu Cronograma por Entregables ({cotizacion.codigoCotizacion})
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {cuotasDetalle.map((c: any) => {
+                const pagada = c.estado === 'PAGADA';
+                const espera = c.estado === 'ESPERA_HITO';
+                return (
+                  <div
+                    key={c.cuotaId}
+                    className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                      pagada
+                        ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800'
+                        : espera
+                          ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800'
+                          : 'bg-sky-50/60 dark:bg-sky-950/20 border-sky-300 dark:border-sky-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-heading font-black text-slate-900 dark:text-white">
+                        Cuota #{c.numero} ({c.porcentaje}%)
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                          pagada
+                            ? 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200'
+                            : espera
+                              ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200'
+                              : 'bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-200'
+                        }`}
+                      >
+                        {c.estado}
+                      </span>
+                    </div>
+                    <div className="font-mono font-bold text-sm text-slate-900 dark:text-white">
+                      S/ {Number(c.monto).toFixed(2)}
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      {c.condicion}
+                    </p>
+                    {c.fechaVencimiento && (
+                      <p className="text-[10px] font-mono text-slate-500">
+                        Fecha límite: {String(c.fechaVencimiento).slice(0, 10)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <strong>Protección al Tesista (Opción B):</strong> El cobro de la Cuota #{cuotaActualNumero} está bloqueado mientras el estado sea{' '}
+              <code className="font-mono font-bold">ESPERA_HITO</code>. Cuando el asesor valide tu avance en la bitácora, recibirás una notificación en Telegram y este enlace quedará habilitado automáticamente.
+            </div>
+          </div>
+
+          <div className="pt-1 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                const fresh = await api.getCotizacionCheckout(cotizacionId).catch(() => cotizacion);
+                setCotizacion(fresh);
+                setLoading(false);
+              }}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs bg-amber-600 hover:bg-amber-500 text-white transition-all cursor-pointer"
+            >
+              Verificar si el asesor ya aprobó el hito
+            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+              <Link
+                href="/admin/customers"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white transition-all flex items-center justify-center gap-1.5"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Panel del Asesor (Aprobar Hito)</span>
+              </Link>
+              <Link
+                href={`/admin/payers/live-chat?orden=${cotizacion.pagoId}`}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all text-center"
+              >
+                Ver Expediente PAYERS
+              </Link>
+            </div>
+          </div>
+        </div>
       ) : (
         /* Formulario Oficial de Checkout */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -279,10 +398,10 @@ export default function CheckoutPage() {
                       )}
                     </div>
                     <div className="font-heading font-black text-base text-slate-900 dark:text-white mt-1">
-                      Pagar Cuota 1: S/ {montoPorCuota.toFixed(2)}
+                      Pagar Cuota #{cuotaActualNumero}: S/ {montoPorCuota.toFixed(2)}
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Activa hoy tu asesoría. Saldo de S/ {saldoRestante.toFixed(2)} a 30 días.
+                      {cuotaActualCondicion} ({cuotaActualEstado}). Saldo posterior: S/ {saldoRestante.toFixed(2)}.
                     </p>
                   </button>
 

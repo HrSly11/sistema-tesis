@@ -142,6 +142,23 @@ function PayersLiveChatContent() {
     }
   };
 
+  const handleAprobarHito = async (numeroCuota: number) => {
+    if (activeId == null) return;
+    setBusyAction(true);
+    try {
+      const res = await api.aprobarHitoCuota(activeId, numeroCuota);
+      setBanner(
+        `Hito aprobado: Cuota #${res.cuota} (S/ ${Number(res.monto).toFixed(2)}) habilitada como EXIGIBLE y notificada por Telegram.`,
+      );
+      await cargarDetalle(activeId);
+      await cargarOrdenes();
+    } catch (err: any) {
+      alert(`Error aprobando hito: ${err.message}`);
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
   const handleWebhook = async () => {
     if (activeId == null) return;
     setBusyAction(true);
@@ -358,11 +375,24 @@ function PayersLiveChatContent() {
                   {cuotas.map((c: any) => (
                     <span
                       key={c.cuota_id}
-                      className={`px-2 py-0.5 rounded font-semibold ${estadoBadge(
-                        c.estado === 'PAGADA' ? 'PAGADA' : 'PENDIENTE',
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-semibold ${estadoBadge(
+                        c.estado === 'PAGADA' ? 'PAGADA' : c.estado === 'EXIGIBLE' ? 'PARCIAL' : 'PENDIENTE',
                       )}`}
                     >
-                      #{c.numero_cuota} • S/ {Number(c.monto_programado).toFixed(2)} • {c.estado}
+                      <span>
+                        #{c.numero_cuota} • S/ {Number(c.monto_programado).toFixed(2)} • {c.estado}
+                      </span>
+                      {c.estado === 'ESPERA_HITO' && (
+                        <button
+                          type="button"
+                          onClick={() => handleAprobarHito(c.numero_cuota)}
+                          disabled={busyAction}
+                          className="ml-1 px-1.5 py-0.2 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9px] cursor-pointer disabled:opacity-50"
+                          title="El asesor aprueba el hito académico: pasa la cuota a EXIGIBLE y avisa por Telegram"
+                        >
+                          ✓ Aprobar hito
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>

@@ -135,6 +135,30 @@ export class CuotasHitoService implements OnApplicationBootstrap {
   }
 
   /**
+   * Reverts an EXIGIBLE installment back to ESPERA_HITO (if not yet paid).
+   */
+  async revertirHito(ordenPagoId: number, numeroCuota: number) {
+    const rows = await this.cuotasConContacto(
+      `cp.orden_pago_id = ${Number(ordenPagoId)} AND cp.numero_cuota = ${Number(numeroCuota)}`,
+    );
+    if (!rows.length) throw new NotFoundException(`Cuota ${numeroCuota} de la orden ${ordenPagoId} no encontrada.`);
+    const cuota = rows[0];
+    if (cuota.estado === 'PAGADA') {
+      throw new BadRequestException(`La cuota ${numeroCuota} ya está PAGADA y no puede revertirse.`);
+    }
+    await this.prisma.$executeRawUnsafe(`
+      UPDATE INBESTIGA_TESIS.dbo.CUOTA_PAGO SET estado = 'ESPERA_HITO' WHERE cuota_id = ${Number(cuota.cuota_id)};
+      DELETE FROM INBESTIGA_TESIS.dbo.ALERTA_COBRANZA WHERE cuota_id = ${Number(cuota.cuota_id)};
+    `);
+    return {
+      status: 'espera_hito',
+      orden: cuota.codigo_orden,
+      cuota: Number(cuota.numero_cuota),
+      monto: Number(cuota.monto_programado),
+    };
+  }
+
+  /**
    * Runs reminders for EXIGIBLE installments and escalates overdue unapproved milestones.
    */
   async procesarRecordatorios() {

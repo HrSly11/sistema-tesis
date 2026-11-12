@@ -100,13 +100,51 @@ export default function CustomersPage() {
   };
 
   // Guardar nueva entrada en la bitácora
+  const [aprobandoCuota, setAprobandoCuota] = useState<number | null>(null);
+
+  const handleAprobarHitoCuota = async (numeroCuota: number) => {
+    if (!trazabilidad?.ordenPagoId || !selectedCustomerId) return;
+    setAprobandoCuota(numeroCuota);
+    try {
+      const res = await api.aprobarHitoCuota(Number(trazabilidad.ordenPagoId), numeroCuota);
+      setNotificacionExito(
+        `✓ Hito validado: Cuota #${res.cuota} (S/ ${Number(res.monto).toFixed(2)}) pasó a EXIGIBLE y se notificó al estudiante por Telegram.`,
+      );
+      const updatedData = await api.getCustomerTrazabilidad(selectedCustomerId);
+      setTrazabilidad(updatedData);
+      setTimeout(() => setNotificacionExito(null), 5000);
+    } catch (error: any) {
+      alert('Error al aprobar hito: ' + (error.message || 'Error de conexión'));
+    } finally {
+      setAprobandoCuota(null);
+    }
+  };
+
+  const handleRevertirHitoCuota = async (numeroCuota: number) => {
+    if (!trazabilidad?.ordenPagoId || !selectedCustomerId) return;
+    setAprobandoCuota(numeroCuota);
+    try {
+      const res = await api.revertirHitoCuota(Number(trazabilidad.ordenPagoId), numeroCuota);
+      setNotificacionExito(
+        `Cuota #${res.cuota} devuelta a ESPERA_HITO (Checkout bloqueado para esta cuota).`,
+      );
+      const updatedData = await api.getCustomerTrazabilidad(selectedCustomerId);
+      setTrazabilidad(updatedData);
+      setTimeout(() => setNotificacionExito(null), 5000);
+    } catch (error: any) {
+      alert('Error al revertir hito: ' + (error.message || 'Error de conexión'));
+    } finally {
+      setAprobandoCuota(null);
+    }
+  };
+
   const handleGuardarBitacora = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustomerId) return;
     setGuardandoBitacora(true);
     try {
-      await api.crearEntradaBitacora(selectedCustomerId, formBitacora);
-      setNotificacionExito('¡Anotación agregada exitosamente a la bitácora!');
+      const res = await api.crearEntradaBitacora(selectedCustomerId, formBitacora);
+      setNotificacionExito(res?.mensaje || '¡Anotación agregada exitosamente a la bitácora!');
       setMostrarFormBitacora(false);
       setFormBitacora({
         hito: 'METODOLOGIA',
@@ -787,6 +825,102 @@ export default function CustomersPage() {
                   {/* TAB 1: FASES E HITOS METODOLÓGICOS */}
                   {activeTab === 'fases' && (
                     <div className="space-y-4">
+                      {trazabilidad?.cuotasPago?.length > 0 && (
+                        <div className="p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800/60 bg-purple-50/40 dark:bg-purple-950/20 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                Validación de Hitos & Desbloqueo de Cuotas (Opción B)
+                              </span>
+                              <h5 className="font-heading font-black text-xs sm:text-sm text-slate-900 dark:text-white">
+                                Orden {trazabilidad.codigoOrden} • Cronograma por Entregables
+                              </h5>
+                            </div>
+                            <Link
+                              href={`/checkout/${trazabilidad.codigoOrden}`}
+                              target="_blank"
+                              className="text-[11px] font-bold text-sky-700 dark:text-sky-400 hover:underline flex items-center gap-1"
+                            >
+                              <span>Abrir Checkout del Estudiante</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </Link>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            {trazabilidad.cuotasPago.map((cp: any) => {
+                              const pagada = cp.estado === 'PAGADA';
+                              const espera = cp.estado === 'ESPERA_HITO';
+                              const exigible = cp.estado === 'EXIGIBLE';
+                              return (
+                                <div
+                                  key={cp.cuota_id}
+                                  className={`p-3 rounded-xl border text-xs flex flex-col justify-between gap-2 ${
+                                    pagada
+                                      ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800'
+                                      : espera
+                                        ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800'
+                                        : 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-300 dark:border-sky-800'
+                                  }`}
+                                >
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-slate-900 dark:text-white">
+                                        Cuota #{cp.numero_cuota} ({cp.porcentaje}%)
+                                      </span>
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                          pagada
+                                            ? 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200'
+                                            : espera
+                                              ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200'
+                                              : 'bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-200'
+                                        }`}
+                                      >
+                                        {cp.estado}
+                                      </span>
+                                    </div>
+                                    <div className="font-mono font-black text-sm text-slate-900 dark:text-white">
+                                      S/ {Number(cp.monto_programado).toFixed(2)}
+                                    </div>
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                      {cp.condicion}
+                                    </p>
+                                    {cp.fecha_vencimiento && (
+                                      <p className="text-[10px] font-mono text-slate-500">
+                                        Vence: {String(cp.fecha_vencimiento).slice(0, 10)}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {espera && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAprobarHitoCuota(cp.numero_cuota)}
+                                      disabled={aprobandoCuota === cp.numero_cuota}
+                                      className="w-full py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer disabled:opacity-50"
+                                    >
+                                      {aprobandoCuota === cp.numero_cuota
+                                        ? 'Habilitando...'
+                                        : `✓ Aprobar hito y habilitar Cuota #${cp.numero_cuota}`}
+                                    </button>
+                                  )}
+                                  {exigible && cp.numero_cuota > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRevertirHitoCuota(cp.numero_cuota)}
+                                      disabled={aprobandoCuota === cp.numero_cuota}
+                                      className="w-full py-1 px-2 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-[10px] transition-colors cursor-pointer disabled:opacity-50"
+                                    >
+                                      Volver a ESPERA_HITO (Bloquear)
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                           Ruta Metodológica de Graduación

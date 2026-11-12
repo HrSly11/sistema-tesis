@@ -68,8 +68,20 @@ export class PaymentsService {
           WHERE orden_pago_id = ${Number(ord.orden_pago_id)}
           ORDER BY numero_cuota ASC;
         `);
+        const cuotaExigible = cuotasRows.find((c) =>
+          ['EXIGIBLE', 'ENLACE_ENVIADO', 'POR_VERIFICAR', 'VENCIDA'].includes(c.estado),
+        );
+        const cuotaEnEspera = cuotasRows.find((c) => c.estado === 'ESPERA_HITO');
         const cuotaActiva =
-          cuotasRows.find((c) => c.estado !== 'PAGADA' && c.estado !== 'ANULADA') || cuotasRows[0];
+          cuotaExigible ||
+          cuotaEnEspera ||
+          cuotasRows.find((c) => c.estado !== 'PAGADA' && c.estado !== 'ANULADA') ||
+          cuotasRows[0];
+        const bloqueadaPorHito = Boolean(!cuotaExigible && cuotaEnEspera && ord.orden_estado !== 'PAGADA');
+        const cuotasPagadas = cuotasRows.filter((c) => c.estado === 'PAGADA').length;
+        const montoPagado = cuotasRows
+          .filter((c) => c.estado === 'PAGADA')
+          .reduce((acc, c) => acc + Number(c.monto_programado || 0), 0);
         const numCuotas = cuotasRows.length || Number(ord.numero_cuotas || 1);
         const totalComprometido = Number(ord.monto_comprometido);
         const montoCuotaActiva = cuotaActiva ? Number(cuotaActiva.monto_programado) : totalComprometido;
@@ -103,6 +115,22 @@ export class PaymentsService {
             cuotasAcordadas: numCuotas,
             totalContrato: totalComprometido,
             montoPorCuota: montoCuotaActiva,
+            cuotaActualNumero: Number(cuotaActiva?.numero_cuota || 1),
+            cuotaActualEstado: cuotaActiva?.estado || 'EXIGIBLE',
+            cuotaActualCondicion: cuotaActiva?.condicion || 'Cuota inicial',
+            cuotaActualVencimiento: cuotaActiva?.fecha_vencimiento || null,
+            bloqueadaPorHito,
+            cuotasPagadas,
+            montoPagado,
+            cuotasDetalle: cuotasRows.map((c) => ({
+              cuotaId: Number(c.cuota_id),
+              numero: Number(c.numero_cuota),
+              porcentaje: Number(c.porcentaje),
+              monto: Number(c.monto_programado),
+              condicion: c.condicion,
+              fechaVencimiento: c.fecha_vencimiento,
+              estado: c.estado,
+            })),
           },
         };
       }
@@ -375,6 +403,11 @@ export class PaymentsService {
   async crearPreferenciaMercadoPago(cotizacionId: string, montoPersonalizado?: number) {
     this.logger.log(`Creando preferencia de Mercado Pago para cotización/orden: ${cotizacionId}`);
     const cot = await this.getCotizacion(cotizacionId);
+    if (cot.planCuotas?.bloqueadaPorHito) {
+      throw new BadRequestException(
+        `La Cuota #${cot.planCuotas.cuotaActualNumero} aún está en espera de validación del hito académico (${cot.planCuotas.cuotaActualCondicion}) por el asesor.`,
+      );
+    }
     const monto =
       montoPersonalizado && Number(montoPersonalizado) > 0
         ? Number(montoPersonalizado)
@@ -488,8 +521,18 @@ export class PaymentsService {
           WHERE orden_pago_id = ${ordenPagoId}
           ORDER BY numero_cuota ASC;
         `);
+        const cuotaExigible = cuotasRows.find((c) =>
+          ['EXIGIBLE', 'ENLACE_ENVIADO', 'POR_VERIFICAR', 'VENCIDA'].includes(c.estado),
+        );
         const cuotaObjetivo =
-          cuotasRows.find((c) => c.estado !== 'PAGADA' && c.estado !== 'ANULADA') || cuotasRows[0];
+          cuotaExigible ||
+          cuotasRows.find((c) => c.estado !== 'PAGADA' && c.estado !== 'ANULADA') ||
+          cuotasRows[0];
+        if (cuotaObjetivo?.estado === 'ESPERA_HITO') {
+          throw new BadRequestException(
+            `La Cuota #${cuotaObjetivo.numero_cuota} aún está en espera de validación del hito académico (${cuotaObjetivo.condicion}) por el asesor.`,
+          );
+        }
         const montoACobrar =
           dto.montoAbonar && dto.montoAbonar > 0
             ? Number(dto.montoAbonar)

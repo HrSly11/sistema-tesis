@@ -19,6 +19,14 @@ export class PayersController {
     return this.cuotasHitoService.aprobarHito(Number(id), Number(numero));
   }
 
+  @Post('ordenes/:id/cuotas/:numero/revertir-hito')
+  @ApiOperation({
+    summary: 'Revierte una cuota de EXIGIBLE a ESPERA_HITO (si aún no fue pagada)',
+  })
+  async revertirHito(@Param('id') id: string, @Param('numero') numero: string) {
+    return this.cuotasHitoService.revertirHito(Number(id), Number(numero));
+  }
+
   @Post('cuotas/recordatorios/ejecutar')
   @ApiOperation({ summary: 'Ejecuta ahora el ciclo de recordatorios de cuotas exigibles y escalamiento de hitos vencidos' })
   async ejecutarRecordatorios() {
