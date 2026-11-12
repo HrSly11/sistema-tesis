@@ -569,7 +569,7 @@ export class PayersService {
       INSERT INTO INBESTIGA_TESIS.dbo.MENSAJE (
         conversacion_id, emisor, tipo_mensaje, contenido, fecha_mensaje
       ) VALUES (
-        ${conversacionId}, 'ESTUDIANTE', 'TEXTO', '${cleanMsg}', GETDATE()
+        ${conversacionId}, 'ESTUDIANTE', 'TEXTO', N'${cleanMsg}', GETDATE()
       );
     `);
 
@@ -790,12 +790,12 @@ export class PayersService {
         `);
 
         respuesta =
-          `⚠️ **Aviso de Tope Operativo en ${billetera} (Regla RN-05):**\n` +
+          `• **Aviso de Tope Operativo en ${billetera} (Regla RN-05):**\n` +
           `Tu cuota exigible #${cuotaPendiente.numero_cuota} es de **S/ ${montoCuotaActual.toFixed(2)}**, y por seguridad de las billeteras móviles en pasarela el límite máximo por operación en **Yape / Plin es de S/ 500.00**.\n\n` +
           `Para completar tu pago ahora mismo tienes **3 alternativas oficiales**:\n` +
-          `1. 💳 **Enlace Checkout con Tarjeta Débito/Crédito (hasta S/ 15,000):** ${urlLink}\n` +
-          `2. 🏦 **Transferencia Bancaria BCP / Interbank (0% comisión):** Cta. Corriente Soles BCP **570-2489103-0-12** | CCI **00257000248910301235** (INBESTIGA SAC) y me envías la captura del voucher por aquí.\n` +
-          `3. 📅 **Fraccionar en 6 cuotas por entregable** para que tu cuota inicial baje a **S/ ${(Number(orden.monto_comprometido) * 0.2).toFixed(2)}** (≤ S/ 500.00 y apta para ${billetera}). ¿Cuál prefieres?`;
+          `1. **Enlace Checkout con Tarjeta Débito/Crédito (hasta S/ 15,000):** ${urlLink}\n` +
+          `2. **Transferencia Bancaria BCP / Interbank (0% comisión):** Cta. Corriente Soles BCP **570-2489103-0-12** | CCI **00257000248910301235** (INBESTIGA SAC) y me envías la captura del voucher por aquí.\n` +
+          `3. **Fraccionar en 6 cuotas por entregable** para que tu cuota inicial baje a **S/ ${(Number(orden.monto_comprometido) * 0.2).toFixed(2)}** (≤ S/ 500.00 y apta para ${billetera}). ¿Cuál prefieres?`;
       } else {
         guardrailsActivados.push(
           `RN-05: Monto S/ ${montoCuotaActual.toFixed(2)} validado dentro del límite operativo de ${billetera} (≤ S/ 500.00)`,
@@ -832,8 +832,8 @@ export class PayersService {
         herramientasEjecutadas.push(toolLink);
 
         respuesta =
-          `✅ ¡Excelente! Como tu cuota #${cuotaPendiente.numero_cuota} es de **S/ ${montoCuotaActual.toFixed(2)}** (dentro del límite de S/ 500.00 de ${billetera}), he generado tu enlace directo de pago automático:\n\n` +
-          `🔗 **Enlace Oficial ${billetera} (Culqi):** ${urlLink}\n` +
+          `• **Enlace directo de pago generado:** Como tu cuota #${cuotaPendiente.numero_cuota} es de **S/ ${montoCuotaActual.toFixed(2)}** (dentro del límite de S/ 500.00 de ${billetera}), he generado tu enlace directo:\n\n` +
+          `• **Enlace Oficial ${billetera} (Culqi):** ${urlLink}\n` +
           `• **Orden:** ${orden.codigo_orden} (${orden.servicio_nombre})\n` +
           `• **Monto:** S/ ${montoCuotaActual.toFixed(2)}\n\n` +
           `Apenas apruebes el pago con tu código de aprobación en ${billetera}, el webhook de Culqi confirmará tu pago en segundos y activará tu servicio automáticamente.`;
@@ -870,9 +870,9 @@ export class PayersService {
       herramientasEjecutadas.push(toolLink);
 
       respuesta =
-        `🔗 **Enlace Oficial de Pago — Orden ${orden.codigo_orden}:**\n\n` +
+        `• **Enlace Oficial de Pago — Orden ${orden.codigo_orden}:**\n\n` +
         `Estimada **${orden.estudiante_nombre}**, aquí tienes tu enlace directo para abonar de forma segura:\n\n` +
-        `💳 **Pagar en Pasarela Culqi:** ${urlEnlace}\n\n` +
+        `• **Pagar en Pasarela Culqi:** ${urlEnlace}\n\n` +
         `• **Servicio:** ${orden.servicio_nombre}\n` +
         `• **Cuota #${cuotaPendiente.numero_cuota}:** S/ ${montoCuotaActual.toFixed(2)} (\`${cuotaPendiente.estado}\`)\n` +
         `• **Medios aceptados:** Yape Directo (hasta S/ 500.00), Tarjeta de Débito/Crédito y Transferencia BCP.\n\n` +
@@ -946,7 +946,7 @@ export class PayersService {
       herramientasEjecutadas.push(toolVoucher);
 
       respuesta =
-        `🧾 **Comprobante Registrado para Validación de Caja (Regla RN-06):**\n` +
+        `• **Comprobante Registrado para Validación de Caja (Regla RN-06):**\n` +
         `He recibido y registrado tu comprobante de **${bancoDetectado}** con operación **${refOperacion}** por **S/ ${montoCuotaActual.toFixed(2)}**.\n\n` +
         `• **Estado actual:** \`POR_VERIFICAR\` (pendiente de conciliación bancaria en Caja).\n` +
         `• **Hash de integridad:** \`${hashImg.slice(0, 16)}...\`\n\n` +
@@ -1002,18 +1002,18 @@ export class PayersService {
         herramientasEjecutadas.push(toolEsc);
 
         respuesta =
-          `🚨 He escalado inmediatamente tu reporte de **cobro duplicado** como \`RECLAMO_PAGO\` al Administrador de Caja para que concilie las transacciones en Culqi y procese la devolución correspondiente.`;
+          `• **Reporte Escalado:** He derivado inmediatamente tu reporte de **cobro duplicado** como \`RECLAMO_PAGO\` al Administrador de Caja para que concilie las transacciones en Culqi y procese la devolución correspondiente.`;
       } else if (pagosConfirmados.length > 0 && orden.estado === 'PAGADA') {
         respuesta =
-          `✅ He consultado la base de datos transaccional (**INBESTIGA_TESIS**) y confirmo que tu orden **${orden.codigo_orden}** registra **${pagosConfirmados.length} pago(s) CONFIRMADO(S)** por un total de **S/ ${Number(orden.monto_cobrado).toFixed(2)}**.\n\n` +
+          `• **Estado Confirmado:** He consultado la base de datos transaccional (**INBESTIGA_TESIS**) y confirmo que tu orden **${orden.codigo_orden}** registra **${pagosConfirmados.length} pago(s) CONFIRMADO(S)** por un total de **S/ ${Number(orden.monto_cobrado).toFixed(2)}**.\n\n` +
           `Tu servicio ya se encuentra **ACTIVO** en la fase **CUSTOMERS**.`;
       } else if (pagosPorVerificar.length > 0) {
         respuesta =
-          `⏳ He consultado la base de datos y veo que tienes un comprobante registrado en estado **POR_VERIFICAR** (Ref: \`${pagosPorVerificar[0].referencia}\`).\n\n` +
+          `• **En Proceso de Verificación:** He consultado la base de datos y veo que tienes un comprobante registrado en estado **POR_VERIFICAR** (Ref: \`${pagosPorVerificar[0].referencia}\`).\n\n` +
           `Por política de control interno (**RN-01 / RN-06**), no puedo activar el servicio únicamente por mensaje de chat; en cuanto Caja apruebe tu voucher en el panel, tu orden pasará a confirmada.`;
       } else {
         respuesta =
-          `🔍 He verificado en tiempo real la base de datos (**PAGO** y **EVENTO_WEBHOOK**) para tu orden **${orden.codigo_orden}** y aún **no figura ningún pago confirmado** para la cuota #${cuotaPendiente.numero_cuota} (S/ ${montoCuotaActual.toFixed(2)}).\n\n` +
+          `• **Consulta de Pago en Línea:** He verificado en tiempo real la base de datos (**PAGO** y **EVENTO_WEBHOOK**) para tu orden **${orden.codigo_orden}** y aún **no figura ningún pago confirmado** para la cuota #${cuotaPendiente.numero_cuota} (S/ ${montoCuotaActual.toFixed(2)}).\n\n` +
           `• Si pagaste por **enlace Culqi (Yape/Plin/Tarjeta)**, puedes usar el botón **"Simular Webhook Pasarela"** o indicarme el código de cargo.\n` +
           `• Si hiciste una **transferencia o depósito BCP/Interbank**, envíame el número de operación para registrarlo en Caja (\`POR_VERIFICAR\`).`;
       }
@@ -1323,13 +1323,13 @@ export class PayersService {
         herramientasEjecutadas.push(toolLink);
 
         respuesta =
-          `✅ **Modalidad Actualizada a ${descripcionModalidad} (Regla RN-03):**\n` +
+          `• **Modalidad Actualizada a ${descripcionModalidad} (Regla RN-03):**\n` +
           `He actualizado el cronograma de tu orden **${orden.codigo_orden}** manteniendo intacto el precio final acordado de **S/ ${totalOrden.toFixed(2)}**:\n\n` +
           `• **Cuota 1 (Exigible hoy para activar asesor):** S/ ${montoInicial.toFixed(2)} (${porcentajes[0]}%)\n` +
           (porcentajes.length > 1
             ? `• **Cuotas siguientes (${porcentajes.length - 1}):** Atadas estrictamente a la entrega verificable de tus hitos académicos (\`ESPERA_HITO\`).\n\n`
             : '\n') +
-          `🔗 **Nuevo enlace de pago de tu Cuota 1:** ${urlLink}`;
+          `• **Nuevo enlace de pago de tu Cuota 1:** ${urlLink}`;
       }
     }
     // =========================================================================
@@ -1666,7 +1666,7 @@ export class PayersService {
         if (estaPagada) {
           respuesta =
             `¡Hola **${orden.estudiante_nombre}**! Soy el agente de cobranza y activación de **INBESTIGA**.\n\n` +
-            `🎉 **Estado de tu cuenta:** Tu orden **${orden.codigo_orden}** se encuentra **100% CANCELADA Y PAGADA**.\n` +
+            `• **Estado de tu cuenta:** Tu orden **${orden.codigo_orden}** se encuentra **100% CANCELADA Y PAGADA**.\n` +
             `• **Servicio:** ${orden.servicio_nombre}\n` +
             `• **Deuda pendiente:** S/ 0.00\n` +
             `• **Estado:** \`ACTIVO (Fase 4: CUSTOMERS)\`\n` +
@@ -1694,7 +1694,7 @@ export class PayersService {
 
           respuesta =
             `¡Hola **${orden.estudiante_nombre}**! Soy el agente de cobranza y activación de **INBESTIGA**.\n\n` +
-            `📋 **Estado en vivo de tu Orden ${orden.codigo_orden}:**\n` +
+            `• **Estado en vivo de tu Orden ${orden.codigo_orden}:**\n` +
             `• **Servicio:** ${orden.servicio_nombre}\n` +
             `• **Contrato:** ${orden.codigo_contrato} (\`${ contrato?.estado || 'CONFIRMADO' }\`)\n` +
             `• **Modalidad:** ${orden.modalidad_condicion}\n` +
@@ -1714,7 +1714,7 @@ export class PayersService {
       INSERT INTO INBESTIGA_TESIS.dbo.MENSAJE (
         conversacion_id, emisor, tipo_mensaje, contenido, fecha_mensaje
       ) VALUES (
-        ${conversacionId}, 'BOT', 'TEXTO', '${cleanResp}', GETDATE()
+        ${conversacionId}, 'BOT', 'TEXTO', N'${cleanResp}', GETDATE()
       );
     `);
 
