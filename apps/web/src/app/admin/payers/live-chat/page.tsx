@@ -44,6 +44,7 @@ function PayersLiveChatContent() {
   const [ordenes, setOrdenes] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState('PENDIENTES');
+  const [canal, setCanal] = useState<'WHATSAPP' | 'TELEGRAM'>('WHATSAPP');
   const [activeId, setActiveId] = useState<number | null>(ordenParam ? Number(ordenParam) : null);
   const [detalle, setDetalle] = useState<any>(null);
   const [input, setInput] = useState('');
@@ -115,13 +116,27 @@ function PayersLiveChatContent() {
     sendingRef.current = true;
     if (!texto) setInput('');
     try {
-      const res = await api.enviarMensajePayerAgent(activeId, msg);
-      setDetalle(res.estadoOrden);
+      const res =
+        canal === 'TELEGRAM'
+          ? await api.enviarMensajeTelegram(activeId, msg)
+          : await api.enviarMensajeWhatsapp(activeId, msg);
+      setDetalle(res.estadoOrden || (await api.getPayerOrden(activeId)));
       setLastGuardrails(res.guardrailsActivados || []);
       setLastTools(res.herramientasEjecutadas || []);
+      if (res.envio) {
+        if (canal === 'TELEGRAM' && !res.envio.exito) {
+          setBanner(
+            '⚠️ Mensaje procesado por PAYERS, pero este estudiante aún no tiene telegram_chat_id vinculado en BD.',
+          );
+        } else if (canal === 'WHATSAPP' && res.envio.exito === false) {
+          setBanner('⚠️ Mensaje procesado por PAYERS, pero ocurrió un aviso en Evolution API.');
+        } else {
+          setBanner(`✓ Mensaje enviado por Agente PAYERS y despachado exitosamente a ${canal}.`);
+        }
+      }
       cargarOrdenes();
     } catch (err: any) {
-      alert(`Error en Agente IA PAYERS: ${err.message}`);
+      alert(`Error en Agente IA PAYERS (${canal}): ${err.message}`);
     } finally {
       setSending(false);
       sendingRef.current = false;
@@ -215,18 +230,46 @@ function PayersLiveChatContent() {
         </div>
 
         <div className="flex items-center gap-2 self-start flex-wrap">
+          {/* Selector de Canal: WhatsApp vs Telegram */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
+            <button
+              type="button"
+              onClick={() => setCanal('WHATSAPP')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                canal === 'WHATSAPP'
+                  ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+              <span>🟢 WhatsApp</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCanal('TELEGRAM')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                canal === 'TELEGRAM'
+                  ? 'bg-sky-600 text-white shadow-sm ring-2 ring-sky-500/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-sky-300 animate-pulse" />
+              <span>🔵 Telegram</span>
+            </button>
+          </div>
+
           <Link
             href="/admin/payers"
             className="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-sky-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 shadow-xs transition-colors"
           >
-            <span>Órdenes de Pago</span>
+            <span>Órdenes</span>
           </Link>
           <button
             onClick={() => activeId != null && cargarDetalle(activeId)}
             className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualizar Chat</span>
+            <span>Actualizar</span>
           </button>
         </div>
       </div>
@@ -357,12 +400,48 @@ function PayersLiveChatContent() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:inline">
-                    Etapa:
+                  <span
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-black tracking-wider uppercase border flex items-center gap-1.5 ${
+                      canal === 'WHATSAPP'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                        : 'bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300 border-sky-300 dark:border-sky-700'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                    <span>Canal Activo: {canal}</span>
                   </span>
-                  <span className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-wider uppercase bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300 border border-sky-300 dark:border-sky-500/30">
+                  <span className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-wider uppercase bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
                     {orden.estado}
                   </span>
+                </div>
+              </div>
+
+              {/* Sub-barra de canal y conectividad del estudiante */}
+              <div
+                className={`px-4 py-2 border-b flex items-center justify-between text-[11px] transition-colors ${
+                  canal === 'WHATSAPP'
+                    ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 text-emerald-900 dark:text-emerald-200'
+                    : 'bg-sky-50/70 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900/40 text-sky-900 dark:text-sky-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <span className="font-bold shrink-0">
+                    {canal === 'WHATSAPP' ? '📱 WhatsApp Estudiante:' : '✈️ Telegram Estudiante:'}
+                  </span>
+                  <span className="font-mono truncate">
+                    {canal === 'WHATSAPP'
+                      ? orden.estudiante_telefono
+                        ? `+${orden.estudiante_telefono}`
+                        : 'Sin celular registrado'
+                      : orden.telegram_username
+                        ? `@${orden.telegram_username}`
+                        : orden.telegram_chat_id
+                          ? `ID: ${orden.telegram_chat_id}`
+                          : 'Pendiente de vincular en Telegram (/start o compartir celular)'}
+                  </span>
+                </div>
+                <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono opacity-80 shrink-0">
+                  <span>{canal === 'WHATSAPP' ? 'Bot: Evolution (+51 994 910 334)' : 'Bot: @inbestiga_tesis_bot'}</span>
                 </div>
               </div>
 
@@ -584,7 +663,11 @@ function PayersLiveChatContent() {
                 >
                   <input
                     type="text"
-                    placeholder="Escribe como estudiante (simula respuesta en Telegram/WhatsApp)..."
+                    placeholder={
+                      canal === 'WHATSAPP'
+                        ? `Escribe un mensaje para enviar al WhatsApp del estudiante (+${orden.estudiante_telefono || '...'} vía Evolution)...`
+                        : `Escribe un mensaje para enviar al Telegram del estudiante (@inbestiga_tesis_bot)...`
+                    }
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -592,14 +675,18 @@ function PayersLiveChatContent() {
                   <button
                     type="submit"
                     disabled={sending || !input.trim()}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-700 to-sky-600 hover:from-blue-600 hover:to-sky-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer shrink-0"
+                    className={`px-4 py-2 rounded-xl text-white font-bold text-xs shadow-md flex items-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer shrink-0 ${
+                      canal === 'WHATSAPP'
+                        ? 'bg-gradient-to-r from-emerald-700 to-green-600 hover:from-emerald-600 hover:to-green-500'
+                        : 'bg-gradient-to-r from-blue-700 to-sky-600 hover:from-blue-600 hover:to-sky-500'
+                    }`}
                   >
                     {sending ? (
                       <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
                     ) : (
                       <Send className="w-3.5 h-3.5" />
                     )}
-                    <span>Enviar</span>
+                    <span>{canal === 'WHATSAPP' ? 'Enviar WhatsApp' : 'Enviar Telegram'}</span>
                   </button>
                 </form>
               </div>

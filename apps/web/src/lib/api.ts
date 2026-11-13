@@ -142,6 +142,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ordenPagoId, mensaje }),
     }),
+  enviarMensajeWhatsapp: (ordenPagoId: number, mensaje: string) =>
+    fetchApi('/whatsapp/agent-chat', {
+      method: 'POST',
+      body: JSON.stringify({ ordenPagoId, mensaje }),
+    }),
+  enviarMensajeTelegram: (ordenPagoId: number, mensaje: string) =>
+    fetchApi('/telegram/agent-chat', {
+      method: 'POST',
+      body: JSON.stringify({ ordenPagoId, mensaje }),
+    }),
   simularWebhookPayers: (ordenPagoId: number, medioPago?: 'Yape' | 'Plin' | 'Tarjeta') =>
     fetchApi('/payers/webhook/simular', {
       method: 'POST',

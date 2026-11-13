@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
 import axios from 'axios';
 import { PayersService } from '../payers/payers.service';
+import { OpenAiVoiceService } from '../voice/openai-voice.service';
 
 interface ChatSession {
   ordenPagoId: number;
@@ -19,6 +20,7 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(forwardRef(() => PayersService))
     private readonly payersService: PayersService,
+    private readonly voice: OpenAiVoiceService,
   ) {
     this.token = process.env.TELEGRAM_BOT_TOKEN || '';
   }
@@ -134,7 +136,22 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
    */
   async procesarMensajeTelegram(message: any) {
     const chatId = message.chat?.id;
+    // Ignorar mensajes de bots (incluido el propio) para evitar bucles
+    if (message.from?.is_bot) return;
+
     let text = (message.text || '').trim();
+    const esVoz = !!(message.voice || message.audio);
+    if (esVoz && chatId) {
+      if (!this.voice.enabled) return;
+      try {
+        text = await this.transcribirVoz(message.voice || message.audio);
+      } catch (error: any) {
+        this.logger.error(`[Telegram] Fallo al transcribir nota de voz: ${error.message}`);
+        await this.enviarMensaje(chatId, 'No pude entender tu nota de voz. ¿Puedes intentarlo de nuevo?');
+        return;
+      }
+      if (!text) return;
+    }
     const fromUser = message.from?.first_name || 'Estudiante';
     const contactPhone = message.contact?.phone_number;
 
@@ -301,25 +318,58 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    // 5. Pasar el mensaje al Agente IA de Cobranza PAYERS
+    // 5. Pasar el mensaje al Agente IA de Cobranza PAYERS (con gpt-4o-mini)
     try {
       const resultado = await this.payersService.procesarChatAgente(session.ordenPagoId, text);
 
-      // Formatear la respuesta para Telegram
-      let respuestaFinal = resultado.respuesta;
-
-      // Si se ejecutaron herramientas, agregar pie informativo
-      if (resultado.herramientasEjecutadas && resultado.herramientasEjecutadas.length > 0) {
-        const toolsNames = resultado.herramientasEjecutadas.map((t: any) => `\`${t.herramienta}\``).join(', ');
-        respuestaFinal += `\n\n🛠️ *Herramientas ejecutadas:* ${toolsNames}`;
+      if (esVoz && this.voice.enabled) {
+        // Respuesta en Nota de Voz nativa con gpt-4o-mini-tts (coral, opus)
+        const audio = await this.voice.synthesize(resultado.respuesta);
+        await this.enviarVoz(chatId, audio);
+      } else {
+        // Respuesta en texto formateado para Telegram
+        let respuestaFinal = resultado.respuesta;
+        if (resultado.herramientasEjecutadas && resultado.herramientasEjecutadas.length > 0) {
+          const toolsNames = resultado.herramientasEjecutadas.map((t: any) => `\`${t.herramienta}\``).join(', ');
+          respuestaFinal += `\n\n🛠️ *Herramientas ejecutadas:* ${toolsNames}`;
+        }
+        await this.enviarMensaje(chatId, respuestaFinal);
       }
-
-      await this.enviarMensaje(chatId, respuestaFinal);
     } catch (error: any) {
       this.logger.error(`Error al procesar mensaje en PayersService: ${error.message}`);
       await this.enviarMensaje(
         chatId,
         `Lo siento, ocurrió una incidencia temporal al procesar tu solicitud. Por favor intenta nuevamente en unos momentos.`,
+      );
+    }
+  }
+
+  /** getFile + descarga del .ogg y transcripción (STT). */
+  private async transcribirVoz(media: { file_id: string }): Promise<string> {
+    const info = await axios.get(`https://api.telegram.org/bot${this.token}/getFile`, {
+      params: { file_id: media.file_id },
+      timeout: 15000,
+    });
+    const filePath = info.data?.result?.file_path;
+    if (!filePath) throw new Error('getFile no devolvió file_path');
+    const file = await axios.get(`https://api.telegram.org/file/bot${this.token}/${filePath}`, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+    });
+    return this.voice.transcribe(Buffer.from(file.data), 'audio.ogg');
+  }
+
+  /** Envía una nota de voz nativa (sendVoice) con un .ogg (Opus). */
+  async enviarVoz(chatId: number | string, ogg: Buffer) {
+    if (!this.isTokenValid()) return;
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('voice', new Blob([new Uint8Array(ogg)], { type: 'audio/ogg' }), 'respuesta.ogg');
+    try {
+      await axios.post(`https://api.telegram.org/bot${this.token}/sendVoice`, form, { timeout: 60000 });
+    } catch (error: any) {
+      this.logger.error(
+        `Error al enviar nota de voz a Telegram ${chatId}: ${error.response?.data?.description || error.message}`,
       );
     }
   }
